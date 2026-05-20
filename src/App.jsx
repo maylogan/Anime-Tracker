@@ -1,0 +1,80 @@
+import { useEffect } from "react";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
+import { useAuthStore } from "./store/store";
+import { getCurrentUser, supabase } from "./services/supabase";
+import { Login, Signup } from "./pages/Auth";
+import { Dashboard } from "./pages/Dashboard";
+import { Profile } from "./pages/Profile";
+import { ProtectedRoute } from "./components/ProtectedRoute";
+
+function App() {
+  const { isLoading, setUser, setLoading } = useAuthStore();
+
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        const user = await getCurrentUser();
+        setUser(user);
+
+        const {
+          data: { subscription },
+        } = supabase.auth.onAuthStateChange((_event, session) => {
+          setUser(session?.user || null);
+        });
+
+        return () => subscription?.unsubscribe();
+      } catch (error) {
+        console.error("Auth init error:", error);
+        setLoading(false);
+      }
+    };
+
+    initAuth();
+  }, [setUser, setLoading]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-dark-900 via-dark-800 to-dark-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 rounded-full border-4 border-dark-700 border-t-accent-blue animate-spin mb-4 mx-auto"></div>
+          <p className="text-white font-bold text-xl mb-2">Anime Tracker</p>
+          <p className="text-dark-300">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Router>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <Profile />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+    </Router>
+  );
+}
+
+export default App;
