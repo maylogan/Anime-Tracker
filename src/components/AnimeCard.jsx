@@ -60,9 +60,9 @@ export const AnimeCard = ({ anime, onEdit, onDelete }) => {
             text={anime.status}
             color={statusColors[anime.status] || "purple"}
           />
-          {anime.categories.length > 0 && (
-            <Badge text={anime.categories[0]} color="cyan" size="sm" />
-          )}
+          {(anime.categories || []).map((category) => (
+            <Badge key={category} text={category} color="cyan" size="sm" />
+          ))}
         </div>
 
         <div className="text-xs text-dark-300 mb-3 space-y-1">

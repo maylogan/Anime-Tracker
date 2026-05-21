@@ -11,6 +11,7 @@ import { Login, Signup } from "./pages/Auth";
 import { Dashboard } from "./pages/Dashboard";
 import { Profile } from "./pages/Profile";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { Bookmarks } from "./pages/Bookmarks";
 
 function App() {
   const { isLoading, setUser, setLoading } = useAuthStore();
@@ -67,6 +68,22 @@ function App() {
           element={
             <ProtectedRoute>
               <Profile />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile/:identifier"
+          element={
+            <ProtectedRoute>
+              <Profile />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/bookmarks"
+          element={
+            <ProtectedRoute>
+              <Bookmarks />
             </ProtectedRoute>
           }
         />

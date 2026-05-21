@@ -15,7 +15,7 @@ export const AnimeFormModal = ({
   const [posterUrl, setPosterUrl] = useState(initialData?.poster_url || "");
   const [categories, setCategories] = useState(initialData?.categories || []);
   const [rating, setRating] = useState(initialData?.rating || 0);
-  const [status, setStatus] = useState(initialData?.status || "Plan to Watch");
+  const [status, setStatus] = useState(initialData?.status || "Completed");
   const [notes, setNotes] = useState(initialData?.notes || "");
   const [episodes, setEpisodes] = useState(initialData?.episodes || "");
   const [releaseDate, setReleaseDate] = useState(
@@ -34,7 +34,7 @@ export const AnimeFormModal = ({
       setPosterUrl(initialData?.poster_url || "");
       setCategories(initialData?.categories || []);
       setRating(initialData?.rating || 0);
-      setStatus(initialData?.status || "Plan to Watch");
+      setStatus(initialData?.status || "Completed");
       setNotes(initialData?.notes || "");
       setEpisodes(initialData?.episodes || "");
       setReleaseDate(initialData?.release_date || "");

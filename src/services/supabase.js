@@ -76,6 +76,45 @@ export const getUserProfile = async (userId) => {
   }
 };
 
+export const getUserProfileByUsername = async (username) => {
+  if (!username) return null;
+
+  const normalizedUsername = username.trim().toLowerCase();
+
+  try {
+    const { data, error } = await supabase
+      .from("user_profiles")
+      .select("*")
+      .ilike("username", normalizedUsername)
+      .maybeSingle();
+
+    if (error && error.code !== "PGRST116") throw error;
+    return data || null;
+  } catch (err) {
+    if (err.message?.includes("404")) return null;
+    throw err;
+  }
+};
+
+const isUuid = (value) =>
+  typeof value === "string" &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value.trim(),
+  );
+
+export const getUserProfileByIdentifier = async (identifier) => {
+  if (!identifier) return null;
+
+  const trimmedIdentifier = identifier.trim();
+
+  if (isUuid(trimmedIdentifier)) {
+    const byId = await getUserProfile(trimmedIdentifier);
+    if (byId) return byId;
+  }
+
+  return getUserProfileByUsername(trimmedIdentifier);
+};
+
 export const createUserProfile = async (userId, username) => {
   try {
     // Use upsert so it doesn't fail if row already exists

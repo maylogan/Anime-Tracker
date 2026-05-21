@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { LogOut, Plus, X } from "lucide-react";
+import { ArrowRight, Bookmark, LogOut, Plus } from "lucide-react";
 import { useAuthStore, useAnimeStore, useUIStore } from "../store/store";
 import { supabase } from "../services/supabase";
 import {
@@ -11,6 +11,10 @@ import {
   deleteAnimeEntry,
   getUserProfile,
 } from "../services/supabase";
+import {
+  getProfileBookmarks,
+  fetchServerBookmarks,
+} from "../services/profileBookmarks";
 import { AnimeCardGrid } from "../components/AnimeCard";
 import { AnimeFormModal } from "../components/AnimeForm";
 import { FilterBar } from "../components/FilterBar";
@@ -43,12 +47,9 @@ export const Dashboard = () => {
   } = useUIStore();
   const [editingData, setEditingData] = useState(null);
   const [profile, setProfile] = useState(null);
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [selectedUserProfile, setSelectedUserProfile] = useState(null);
-  const [selectedUserAnime, setSelectedUserAnime] = useState([]);
+  const [followedPages, setFollowedPages] = useState([]);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
-  const [selectedAnimeDetail, setSelectedAnimeDetail] = useState(null);
 
   useEffect(() => {
     if (!user) {
@@ -74,6 +75,94 @@ export const Dashboard = () => {
 
     loadData();
   }, [user, navigate, setEntries, setLoading, setupRealtimeListener]);
+
+  useEffect(() => {
+    if (!user) {
+      setFollowedPages([]);
+      return;
+    }
+
+    let isMounted = true;
+    const load = async () => {
+      try {
+        const server = await fetchServerBookmarks(user.id);
+        if (isMounted && Array.isArray(server)) {
+          setFollowedPages(server);
+          return;
+        }
+      } catch (err) {
+        // ignore and fallback to local
+      }
+
+      if (isMounted) setFollowedPages(getProfileBookmarks(user.id));
+    };
+
+    load();
+    const onUpdated = async (e) => {
+      if (!user) return;
+      try {
+        const server = await fetchServerBookmarks(user.id);
+        if (Array.isArray(server)) setFollowedPages(server);
+        else setFollowedPages(getProfileBookmarks(user.id));
+      } catch (err) {
+        setFollowedPages(getProfileBookmarks(user.id));
+      }
+    };
+
+    window.addEventListener("profileBookmarks:updated", onUpdated);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener("profileBookmarks:updated", onUpdated);
+    };
+  }, [user]);
+
+  // Activity feed from followed pages: fetch latest entries
+  const [activityFeed, setActivityFeed] = useState([]);
+  useEffect(() => {
+    let isMounted = true;
+    const loadActivity = async () => {
+      if (!user || !followedPages || followedPages.length === 0) {
+        setActivityFeed([]);
+        return;
+      }
+
+      try {
+        const all = [];
+        // For each followed page, fetch their entries (limit recent)
+        for (const p of followedPages.slice(0, 10)) {
+          try {
+            const entries = await getAnimeEntries(p.id);
+            (entries || []).forEach((e) => {
+              all.push({
+                profile: p,
+                entry: e,
+              });
+            });
+          } catch (err) {
+            // ignore per-profile errors
+          }
+        }
+
+        const sorted = all
+          .filter((x) => x.entry && x.entry.created_at)
+          .sort(
+            (a, b) =>
+              new Date(b.entry.created_at) - new Date(a.entry.created_at),
+          )
+          .slice(0, 8);
+
+        if (isMounted) setActivityFeed(sorted);
+      } catch (err) {
+        console.error("Error loading activity feed:", err);
+      }
+    };
+
+    loadActivity();
+    return () => {
+      isMounted = false;
+    };
+  }, [followedPages, user]);
 
   // Apply filters when entries change
   useEffect(() => {
@@ -131,16 +220,8 @@ export const Dashboard = () => {
     openEditModal(anime.id);
   };
 
-  const handleSelectUser = async (user) => {
-    setSelectedUser(user);
-    try {
-      const userProfile = await getUserProfile(user.id);
-      setSelectedUserProfile(userProfile);
-      const userAnime = await getAnimeEntries(user.id);
-      setSelectedUserAnime(userAnime);
-    } catch (err) {
-      console.error("Error loading user profile:", err);
-    }
+  const handleSelectUser = (selectedUser) => {
+    navigate(`/profile/${selectedUser.username}`);
   };
 
   const handleLogout = async () => {
@@ -196,6 +277,19 @@ export const Dashboard = () => {
               <UserSearch onUserSelect={handleSelectUser} />
             </div>
 
+            <div className="w-36">
+              <motion.button
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => navigate("/bookmarks")}
+                className="w-full h-11 bg-dark-800 hover:bg-dark-700 border border-dark-700 hover:border-accent-blue text-dark-50 rounded-lg px-3 font-semibold flex items-center justify-center gap-2 transition-all duration-200"
+                title="Bookmarks"
+              >
+                <Bookmark size={16} />
+                Bookmarks
+              </motion.button>
+            </div>
+
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -222,6 +316,10 @@ export const Dashboard = () => {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 py-8">
         <FilterBar allCategories={allCategories} allYears={allYears} />
+
+        {/* Bookmarks and activity moved to /bookmarks page per request */}
+
+        {/* Activity feed removed from dashboard */}
 
         <motion.div
           initial={{ opacity: 0 }}
@@ -323,104 +421,6 @@ export const Dashboard = () => {
         />
       )}
 
-      {/* Selected User Profile Modal */}
-      {selectedUser && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={() => setSelectedUser(null)}
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-        >
-          <motion.div
-            initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            onClick={(e) => e.stopPropagation()}
-            className="bg-dark-800 rounded-xl border border-dark-700 max-w-2xl w-full max-h-[80vh] overflow-y-auto"
-          >
-            {/* User Header */}
-            <div className="bg-gradient-to-r from-accent-blue/20 to-accent-purple/20 p-6 border-b border-dark-700">
-              <div className="flex items-center gap-4">
-                {selectedUser.avatar_url ? (
-                  <img
-                    src={selectedUser.avatar_url}
-                    alt={selectedUser.username}
-                    className="w-16 h-16 rounded-full object-cover border-2 border-accent-blue"
-                  />
-                ) : (
-                  <div className="w-16 h-16 rounded-full bg-accent-blue/20 flex items-center justify-center">
-                    <span className="text-2xl font-semibold text-accent-blue">
-                      {selectedUser.username[0]?.toUpperCase()}
-                    </span>
-                  </div>
-                )}
-                <div>
-                  <h2 className="text-2xl font-bold text-dark-50">
-                    {selectedUser.username}
-                  </h2>
-                  <p className="text-dark-400 text-sm">
-                    {selectedUserAnime.length} anime in collection
-                  </p>
-                </div>
-                <button
-                  onClick={() => setSelectedUser(null)}
-                  className="ml-auto text-dark-400 hover:text-dark-200 transition-colors"
-                >
-                  <X size={24} />
-                </button>
-              </div>
-            </div>
-
-            {/* User's Anime Collection */}
-            <div className="p-6">
-              {selectedUserAnime.length === 0 ? (
-                <div className="text-center py-8">
-                  <p className="text-dark-400">
-                    {selectedUser.username} has no anime in their collection yet
-                  </p>
-                </div>
-              ) : (
-                <div>
-                  <h3 className="text-lg font-semibold text-dark-50 mb-4">
-                    Anime Collection
-                  </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {selectedUserAnime.map((anime) => (
-                      <button
-                        key={anime.id}
-                        onClick={() => setSelectedAnimeDetail(anime)}
-                        className="card-base p-4 flex items-start gap-3 hover:bg-dark-700 transition-colors text-left"
-                      >
-                        {anime.cover_image && (
-                          <img
-                            src={anime.cover_image}
-                            alt={anime.title}
-                            className="w-12 h-16 rounded object-cover flex-shrink-0"
-                          />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-dark-50 truncate">
-                            {anime.title}
-                          </p>
-                          <p className="text-xs text-dark-400">
-                            Status: {anime.status}
-                          </p>
-                          {anime.episodes_watched && (
-                            <p className="text-xs text-accent-blue">
-                              {anime.episodes_watched} episodes watched
-                            </p>
-                          )}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-
       {/* Delete Confirmation Modal */}
       {isDeleteConfirmOpen && (
         <motion.div
@@ -429,11 +429,7 @@ export const Dashboard = () => {
           exit={{ opacity: 0 }}
           className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
         >
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="bg-dark-800 rounded-xl border border-dark-700 p-6 max-w-sm w-full shadow-2xl"
-          >
+          <motion.div initial={{ scale: 0.9, opacity: 0 }}>
             <h3 className="text-xl font-bold text-dark-50 mb-2">
               Delete Anime?
             </h3>
@@ -454,102 +450,6 @@ export const Dashboard = () => {
               >
                 Cancel
               </button>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-
-      {/* Anime Detail Modal */}
-      {selectedAnimeDetail && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={() => setSelectedAnimeDetail(null)}
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-        >
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            onClick={(e) => e.stopPropagation()}
-            className="bg-dark-800 rounded-xl border border-dark-700 max-w-2xl w-full max-h-[80vh] overflow-y-auto shadow-2xl"
-          >
-            <div className="sticky top-0 bg-dark-800 border-b border-dark-700 px-6 py-4 flex justify-between items-center">
-              <h2 className="text-2xl font-bold text-dark-50">
-                {selectedAnimeDetail.title}
-              </h2>
-              <button
-                onClick={() => setSelectedAnimeDetail(null)}
-                className="text-3xl text-dark-400 hover:text-accent-blue transition-colors"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="p-6 space-y-6">
-              <div className="flex gap-4">
-                {selectedAnimeDetail.cover_image && (
-                  <img
-                    src={selectedAnimeDetail.cover_image}
-                    alt={selectedAnimeDetail.title}
-                    className="w-32 h-48 rounded-lg object-cover flex-shrink-0"
-                  />
-                )}
-                <div className="flex-1">
-                  <div className="space-y-3">
-                    <div>
-                      <p className="text-sm text-dark-400 font-semibold">
-                        Status
-                      </p>
-                      <p className="text-lg text-dark-50">
-                        {selectedAnimeDetail.status}
-                      </p>
-                    </div>
-
-                    {selectedAnimeDetail.rating > 0 && (
-                      <div>
-                        <p className="text-sm text-dark-400 font-semibold">
-                          Their Rating
-                        </p>
-                        <p className="text-lg text-accent-yellow">
-                          {"⭐".repeat(selectedAnimeDetail.rating)}
-                        </p>
-                      </div>
-                    )}
-
-                    {selectedAnimeDetail.episodes_watched && (
-                      <div>
-                        <p className="text-sm text-dark-400 font-semibold">
-                          Episodes Watched
-                        </p>
-                        <p className="text-lg text-dark-50">
-                          {selectedAnimeDetail.episodes_watched}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {selectedAnimeDetail.notes && (
-                <div>
-                  <p className="text-sm text-dark-400 font-semibold mb-2">
-                    Their Notes
-                  </p>
-                  <div className="bg-dark-700 rounded-lg p-4 border border-dark-600">
-                    <p className="text-dark-50 whitespace-pre-wrap">
-                      {selectedAnimeDetail.notes}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {!selectedAnimeDetail.notes &&
-                selectedAnimeDetail.rating === 0 && (
-                  <div className="text-center p-8 text-dark-400">
-                    <p>No notes or rating for this anime</p>
-                  </div>
-                )}
             </div>
           </motion.div>
         </motion.div>
