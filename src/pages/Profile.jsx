@@ -5,14 +5,12 @@ import {
   ArrowLeft,
   Bookmark,
   BookmarkCheck,
-  CalendarDays,
   LogOut,
   User,
   Edit2,
   Check,
   X,
   Camera,
-  Upload,
   Shield,
 } from "lucide-react";
 import { useAuthStore } from "../store/store";
@@ -25,7 +23,8 @@ import {
   checkUsernameAvailable,
   uploadAvatar,
 } from "../services/supabase";
-import { RatingStars } from "../components/Common";
+import { AnimeCardGrid } from "../components/AnimeCard";
+import { FilterBar } from "../components/FilterBar";
 import {
   isProfileBookmarked,
   toggleProfileBookmark,
@@ -155,6 +154,30 @@ export const Profile = () => {
   // Profile list filters
   const [profileQuery, setProfileQuery] = useState("");
   const [profileStatusFilter, setProfileStatusFilter] = useState("All");
+  const [profileCategoryFilter, setProfileCategoryFilter] = useState("All");
+  const [profileYearFilter, setProfileYearFilter] = useState("All");
+  const [profileMinRating, setProfileMinRating] = useState(0);
+
+  const profileCategories = useMemo(
+    () =>
+      Array.from(
+        new Set((profileAnime || []).flatMap((a) => a.categories || [])),
+      ),
+    [profileAnime],
+  );
+
+  const profileYears = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (profileAnime || [])
+            .filter((a) => a.release_date)
+            .map((a) => new Date(a.release_date).getFullYear())
+            .filter((year) => !Number.isNaN(year)),
+        ),
+      ),
+    [profileAnime],
+  );
 
   const filteredProfileAnime = useMemo(() => {
     if (!profileAnime) return [];
@@ -166,6 +189,23 @@ export const Profile = () => {
         a.status !== profileStatusFilter
       )
         return false;
+
+      if (
+        profileCategoryFilter &&
+        profileCategoryFilter !== "All" &&
+        !(a.categories || []).includes(profileCategoryFilter)
+      )
+        return false;
+
+      if (profileYearFilter && profileYearFilter !== "All") {
+        const year = a.release_date
+          ? new Date(a.release_date).getFullYear().toString()
+          : "";
+        if (year !== profileYearFilter) return false;
+      }
+
+      if ((a.rating || 0) < profileMinRating) return false;
+
       if (!q) return true;
       const inTitle = (a.title || "").toLowerCase().includes(q);
       const inNotes = (a.notes || "").toLowerCase().includes(q);
@@ -174,7 +214,14 @@ export const Profile = () => {
       );
       return inTitle || inNotes || inCats;
     });
-  }, [profileAnime, profileQuery, profileStatusFilter]);
+  }, [
+    profileAnime,
+    profileQuery,
+    profileStatusFilter,
+    profileCategoryFilter,
+    profileYearFilter,
+    profileMinRating,
+  ]);
 
   const checkUsername = async (username) => {
     if (!username.trim()) {
@@ -422,23 +469,22 @@ export const Profile = () => {
                           No bio provided
                         </p>
                       )}
-                      <div className="flex items-center gap-4">
-                        <p className="text-dark-400 text-sm">
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+                        <p className="text-dark-400 text-xs sm:text-sm">
                           {profileAnime.length} anime in collection
                         </p>
-                        <div className="text-dark-400 text-sm">•</div>
-                        <p className="text-dark-400 text-sm">
+                        <div className="text-dark-400 text-xs sm:text-sm">•</div>
+                        <p className="text-dark-400 text-xs sm:text-sm">
                           Watched: {stats.totalWatched}
                         </p>
-                        <div className="text-dark-400 text-sm">•</div>
-                        <p className="text-dark-400 text-sm">
-                          Avg:{" "}
-                          {stats.avgRating ? stats.avgRating.toFixed(1) : "-"}
+                        <div className="text-dark-400 text-xs sm:text-sm">•</div>
+                        <p className="text-dark-400 text-xs sm:text-sm">
+                          Avg: {stats.avgRating ? stats.avgRating.toFixed(1) : "-"}
                         </p>
                         {stats.favoriteGenre && (
                           <>
-                            <div className="text-dark-400 text-sm">•</div>
-                            <p className="text-dark-400 text-sm">
+                            <div className="text-dark-400 text-xs sm:text-sm">•</div>
+                            <p className="text-dark-400 text-xs sm:text-sm">
                               Fav: {stats.favoriteGenre}
                             </p>
                           </>
@@ -478,87 +524,43 @@ export const Profile = () => {
                 </div>
               </motion.section>
 
-              <div className="grid lg:grid-cols-3 gap-8">
-                <motion.section
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}
-                  className="card-base p-6 lg:col-span-1 space-y-5"
-                >
-                  <div>
-                    <p className="text-sm text-dark-400 mb-2 flex items-center gap-2">
-                      <CalendarDays size={14} /> Member since
-                    </p>
-                    <p className="text-dark-50 font-semibold">
-                      {profile?.created_at
-                        ? new Date(profile.created_at).toLocaleDateString(
-                            "en-US",
-                            {
-                              year: "numeric",
-                              month: "long",
-                              day: "numeric",
-                            },
-                          )
-                        : "Unknown"}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-sm text-dark-400 mb-2">Public link</p>
-                    <p className="text-dark-50 break-all font-mono text-sm bg-dark-900/60 rounded-lg p-3 border border-dark-700">
-                      {window.location.origin}/profile/{profile.username}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-sm text-dark-400 mb-2">Saved pages</p>
-                    <p className="text-dark-50 font-semibold">
-                      {isOwnProfilePage
-                        ? "This is your own page"
-                        : isBookmarked
-                          ? "Saved in your dashboard"
-                          : "Not saved yet"}
-                    </p>
-                  </div>
-                </motion.section>
-
+              <div className="space-y-8">
                 <motion.section
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.2 }}
-                  className="card-base p-6 lg:col-span-2"
+                  className="space-y-5"
                 >
-                  <div className="flex items-center justify-between mb-5">
-                    <div>
-                      <h2 className="text-xl font-bold text-dark-50">
-                        Anime Collection
-                      </h2>
-                      <p className="text-dark-400 text-sm">
-                        What this profile has tracked so far
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        value={profileQuery}
-                        onChange={(e) => setProfileQuery(e.target.value)}
-                        placeholder="Search titles, notes, genres..."
-                        className="bg-dark-900 border border-dark-700 rounded-lg px-3 py-2 text-dark-50 placeholder-dark-400 text-sm"
-                      />
-                      <select
-                        value={profileStatusFilter}
-                        onChange={(e) => setProfileStatusFilter(e.target.value)}
-                        className="bg-dark-900 border border-dark-700 rounded-lg px-2 py-2 text-dark-50 text-sm"
-                      >
-                        <option>All</option>
-                        <option>Watching</option>
-                        <option>Completed</option>
-                        <option>Plan to Watch</option>
-                        <option>Dropped</option>
-                      </select>
-                    </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-dark-50">
+                      Anime Collection
+                    </h2>
+                    <p className="text-dark-400 text-sm mt-1">
+                      What this profile has tracked so far
+                    </p>
                   </div>
 
-                  {filteredProfileAnime.length === 0 ? (
+                  <FilterBar
+                    allCategories={profileCategories}
+                    allYears={profileYears}
+                    showAddButton={false}
+                    showCardDensity={false}
+                    searchPlaceholder="Search anime in this collection by title"
+                    filters={{
+                      searchQuery: profileQuery,
+                      selectedStatus: profileStatusFilter,
+                      selectedCategory: profileCategoryFilter,
+                      selectedYear: profileYearFilter,
+                      minRating: profileMinRating,
+                      setSearchQuery: setProfileQuery,
+                      setSelectedStatus: setProfileStatusFilter,
+                      setSelectedCategory: setProfileCategoryFilter,
+                      setSelectedYear: setProfileYearFilter,
+                      setMinRating: setProfileMinRating,
+                    }}
+                  />
+
+                  {profileAnime.length === 0 ? (
                     <div className="rounded-xl border border-dashed border-dark-700 bg-dark-900/40 p-8 text-center text-dark-300">
                       <p className="font-semibold text-dark-50 mb-1">
                         No anime here yet
@@ -569,50 +571,10 @@ export const Profile = () => {
                       </p>
                     </div>
                   ) : (
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      {filteredProfileAnime.map((anime) => (
-                        <div
-                          key={anime.id}
-                          className="rounded-xl border border-dark-700 bg-dark-900/50 p-4 flex gap-3"
-                        >
-                          {anime.poster_url || anime.cover_image ? (
-                            <img
-                              src={anime.poster_url || anime.cover_image}
-                              alt={anime.title}
-                              className="w-14 h-20 rounded-lg object-cover flex-shrink-0"
-                            />
-                          ) : (
-                            <div className="w-14 h-20 rounded-lg bg-dark-700 flex items-center justify-center text-dark-300 text-xs text-center px-1 flex-shrink-0">
-                              No cover
-                            </div>
-                          )}
-
-                          <div className="min-w-0 flex-1">
-                            <p className="font-semibold text-dark-50 truncate">
-                              {anime.title}
-                            </p>
-                            <p className="text-xs text-dark-400 mt-1">
-                              Status: {anime.status || "Unknown"}
-                            </p>
-                            {anime.rating > 0 && (
-                              <div className="mt-1">
-                                <RatingStars rating={anime.rating} size="sm" />
-                              </div>
-                            )}
-                            {anime.episodes_watched ? (
-                              <p className="text-xs text-accent-blue mt-1">
-                                {anime.episodes_watched} episodes watched
-                              </p>
-                            ) : null}
-                            {anime.notes && (
-                              <p className="text-dark-400 text-xs mt-2 italic line-clamp-2">
-                                {anime.notes}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                    <AnimeCardGrid
+                      anime={filteredProfileAnime}
+                      densityOverride="superCondensed"
+                    />
                   )}
                 </motion.section>
               </div>

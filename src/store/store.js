@@ -19,6 +19,7 @@ export const useAnimeStore = create((set, get) => ({
   selectedCategory: "All",
   selectedYear: "All",
   minRating: 0,
+  cardDensity: "superCondensed",
 
   setEntries: (entries) => set({ entries }),
   setLoading: (isLoading) => set({ isLoading }),
@@ -27,6 +28,7 @@ export const useAnimeStore = create((set, get) => ({
   setSelectedCategory: (category) => set({ selectedCategory: category }),
   setSelectedYear: (year) => set({ selectedYear: year }),
   setMinRating: (rating) => set({ minRating: rating }),
+  setCardDensity: (cardDensity) => set({ cardDensity }),
 
   addEntry: (entry) => {
     const { entries } = get();

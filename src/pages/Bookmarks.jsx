@@ -67,6 +67,14 @@ export const Bookmarks = () => {
           } catch (err) {}
         }
         const sorted = all
+          .filter((x) => {
+            const rating = x.entry?.rating;
+            return (
+              typeof rating === "number" &&
+              rating > 0 &&
+              (rating >= 9 || rating <= 2)
+            );
+          })
           .filter((x) => x.entry && x.entry.created_at)
           .sort(
             (a, b) =>
@@ -91,7 +99,7 @@ export const Bookmarks = () => {
         animate={{ opacity: 1, y: 0 }}
         className="sticky top-0 z-40 backdrop-blur-md bg-dark-900/80 border-b border-accent-blue/20"
       >
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center gap-4">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center gap-4">
           <div className="w-20">
             <button
               onClick={() => navigate("/dashboard")}
@@ -101,17 +109,9 @@ export const Bookmarks = () => {
             </button>
           </div>
 
-          <div className="flex-1 flex justify-center">
-            <h2 className="text-xl font-bold text-dark-50 flex items-center gap-2">
-              <Bookmark size={18} /> Bookmarks
-            </h2>
-          </div>
+          <h2 className="text-xl font-bold text-dark-50">Bookmarks</h2>
 
-          <div className="w-48">
-            <UserSearch
-              onUserSelect={(u) => navigate(`/profile/${u.username}`)}
-            />
-          </div>
+          <div className="w-20" />
         </div>
       </motion.div>
 
@@ -119,15 +119,18 @@ export const Bookmarks = () => {
         <motion.section className="card-base p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-lg font-bold text-dark-50">
-                Pages you follow
-              </h3>
+              <h3 className="text-lg font-bold text-dark-50">Pages you follow</h3>
               <p className="text-dark-400 text-sm">
                 Quick access to profiles you saved
               </p>
             </div>
-            <div className="text-dark-400 text-sm">
-              {bookmarks.length} saved
+            <div className="flex items-center gap-3">
+              <div className="w-48 hidden sm:block">
+                <UserSearch
+                  onUserSelect={(u) => navigate(`/profile/${u.username}`)}
+                />
+              </div>
+              <div className="text-dark-400 text-sm">{bookmarks.length} saved</div>
             </div>
           </div>
 
@@ -178,7 +181,7 @@ export const Bookmarks = () => {
           </h3>
           {activity.length === 0 ? (
             <div className="text-dark-400">
-              No recent activity from followed pages.
+              No recent 9+/2- ratings from followed pages.
             </div>
           ) : (
             <div className="space-y-3">
@@ -214,6 +217,12 @@ export const Bookmarks = () => {
                           <span className="text-accent-blue">
                             {it.entry.title}
                           </span>
+                          {typeof it.entry.rating === "number" && (
+                            <span className="text-dark-400">
+                              {" "}
+                              rated {it.entry.rating}/10
+                            </span>
+                          )}
                         </p>
                       </div>
                       <div className="text-xs text-dark-400">

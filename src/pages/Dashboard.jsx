@@ -249,44 +249,33 @@ export const Dashboard = () => {
         animate={{ opacity: 1, y: 0 }}
         className="sticky top-0 z-40 backdrop-blur-md bg-gradient-to-r from-dark-900/80 via-dark-900/80 to-dark-900/80 border-b border-accent-blue/20"
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center gap-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 sm:gap-4">
           {/* Left: Title */}
-          <div>
-            <h1 className="text-4xl font-bold text-dark-50">Anime Tracker</h1>
+          <div className="w-full sm:w-auto">
+            <h1 className="text-2xl sm:text-4xl font-bold text-dark-50">
+              Anime Tracker
+            </h1>
             <p className="text-dark-400 text-sm mt-1">
               {entries.length} anime in collection
             </p>
           </div>
 
-          {/* Center: Add Anime Button */}
-          <div className="flex-1 flex justify-center">
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={openAddModal}
-              className="btn-primary flex items-center gap-2"
-            >
-              <Plus size={20} />
-              Add Anime
-            </motion.button>
-          </div>
-
           {/* Right: User Search and Profile */}
-          <div className="flex gap-3 items-center">
-            <div className="w-48">
+          <div className="w-full sm:w-auto flex items-center gap-2 sm:gap-3">
+            <div className="min-w-0 flex-1 sm:flex-none sm:w-48">
               <UserSearch onUserSelect={handleSelectUser} />
             </div>
 
-            <div className="w-36">
+            <div className="w-auto sm:w-36 shrink-0">
               <motion.button
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => navigate("/bookmarks")}
-                className="w-full h-11 bg-dark-800 hover:bg-dark-700 border border-dark-700 hover:border-accent-blue text-dark-50 rounded-lg px-3 font-semibold flex items-center justify-center gap-2 transition-all duration-200"
+                className="w-full h-10 sm:h-11 bg-dark-800 hover:bg-dark-700 border border-dark-700 hover:border-accent-blue text-dark-50 rounded-lg px-2 sm:px-3 text-sm font-semibold flex items-center justify-center gap-1.5 sm:gap-2 transition-all duration-200"
                 title="Bookmarks"
               >
                 <Bookmark size={16} />
-                Bookmarks
+                <span className="hidden sm:inline">Bookmarks</span>
               </motion.button>
             </div>
 
@@ -294,7 +283,7 @@ export const Dashboard = () => {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => navigate("/profile")}
-              className="bg-dark-800 hover:bg-dark-700 border border-dark-700 hover:border-accent-blue text-dark-50 rounded-lg px-3 py-2 font-semibold flex items-center gap-2 transition-all duration-300"
+              className="h-10 sm:h-auto bg-dark-800 hover:bg-dark-700 border border-dark-700 hover:border-accent-blue text-dark-50 rounded-lg px-2.5 sm:px-3 py-2 font-semibold flex items-center gap-2 transition-all duration-300 shrink-0"
               title="Profile"
             >
               {profile?.avatar_url ? (
@@ -315,7 +304,11 @@ export const Dashboard = () => {
       </motion.header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 py-8">
-        <FilterBar allCategories={allCategories} allYears={allYears} />
+        <FilterBar
+          allCategories={allCategories}
+          allYears={allYears}
+          onAddAnime={openAddModal}
+        />
 
         {/* Bookmarks and activity moved to /bookmarks page per request */}
 
@@ -429,7 +422,12 @@ export const Dashboard = () => {
           exit={{ opacity: 0 }}
           className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
         >
-          <motion.div initial={{ scale: 0.9, opacity: 0 }}>
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="w-full max-w-md card-base p-6 border border-dark-700 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 className="text-xl font-bold text-dark-50 mb-2">
               Delete Anime?
             </h3>

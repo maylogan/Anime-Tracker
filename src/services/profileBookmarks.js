@@ -54,7 +54,9 @@ const writeState = (userId, state) => {
   );
   try {
     // notify other windows/components that bookmarks changed
-    window.dispatchEvent(new CustomEvent("profileBookmarks:updated", { detail: { userId } }));
+    window.dispatchEvent(
+      new CustomEvent("profileBookmarks:updated", { detail: { userId } }),
+    );
   } catch (err) {
     // ignore
   }

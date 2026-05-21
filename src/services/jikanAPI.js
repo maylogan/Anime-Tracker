@@ -17,6 +17,7 @@ export const searchAnime = async (query) => {
               }
               genres
               coverImage {
+                extraLarge
                 large
               }
               episodes
@@ -57,6 +58,7 @@ export const getAnimeDetails = async (animeId) => {
             }
             genres
             coverImage {
+              extraLarge
               large
             }
           }
@@ -83,7 +85,7 @@ export const formatAnimeForEntry = (anime) => {
   return {
     anime_id: anime.id,
     title: anime.title?.english || anime.title?.romaji || "Unknown",
-    poster_url: anime.coverImage?.large || "",
+    poster_url: anime.coverImage?.extraLarge || anime.coverImage?.large || "",
     categories: anime.genres || [],
     episodes: anime.episodes || null,
     release_date: releaseDate || null,
