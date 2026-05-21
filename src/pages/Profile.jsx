@@ -473,17 +473,24 @@ export const Profile = () => {
                         <p className="text-dark-400 text-xs sm:text-sm">
                           {profileAnime.length} anime in collection
                         </p>
-                        <div className="text-dark-400 text-xs sm:text-sm">•</div>
+                        <div className="text-dark-400 text-xs sm:text-sm">
+                          •
+                        </div>
                         <p className="text-dark-400 text-xs sm:text-sm">
                           Watched: {stats.totalWatched}
                         </p>
-                        <div className="text-dark-400 text-xs sm:text-sm">•</div>
+                        <div className="text-dark-400 text-xs sm:text-sm">
+                          •
+                        </div>
                         <p className="text-dark-400 text-xs sm:text-sm">
-                          Avg: {stats.avgRating ? stats.avgRating.toFixed(1) : "-"}
+                          Avg:{" "}
+                          {stats.avgRating ? stats.avgRating.toFixed(1) : "-"}
                         </p>
                         {stats.favoriteGenre && (
                           <>
-                            <div className="text-dark-400 text-xs sm:text-sm">•</div>
+                            <div className="text-dark-400 text-xs sm:text-sm">
+                              •
+                            </div>
                             <p className="text-dark-400 text-xs sm:text-sm">
                               Fav: {stats.favoriteGenre}
                             </p>

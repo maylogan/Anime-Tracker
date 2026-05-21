@@ -119,7 +119,9 @@ export const Bookmarks = () => {
         <motion.section className="card-base p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-lg font-bold text-dark-50">Pages you follow</h3>
+              <h3 className="text-lg font-bold text-dark-50">
+                Pages you follow
+              </h3>
               <p className="text-dark-400 text-sm">
                 Quick access to profiles you saved
               </p>
@@ -130,7 +132,9 @@ export const Bookmarks = () => {
                   onUserSelect={(u) => navigate(`/profile/${u.username}`)}
                 />
               </div>
-              <div className="text-dark-400 text-sm">{bookmarks.length} saved</div>
+              <div className="text-dark-400 text-sm">
+                {bookmarks.length} saved
+              </div>
             </div>
           </div>
 
