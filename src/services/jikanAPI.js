@@ -16,6 +16,7 @@ export const searchAnime = async (query) => {
                 native
               }
               genres
+              averageScore
               coverImage {
                 extraLarge
                 large
@@ -57,6 +58,7 @@ export const getAnimeDetails = async (animeId) => {
               romaji
             }
             genres
+            averageScore
             coverImage {
               extraLarge
               large
@@ -89,5 +91,9 @@ export const formatAnimeForEntry = (anime) => {
     categories: anime.genres || [],
     episodes: anime.episodes || null,
     release_date: releaseDate || null,
+    audience_rating:
+      typeof anime.averageScore === "number" && anime.averageScore > 0
+        ? Number((anime.averageScore / 10).toFixed(1))
+        : null,
   };
 };

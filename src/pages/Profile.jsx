@@ -155,8 +155,12 @@ export const Profile = () => {
   const [profileQuery, setProfileQuery] = useState("");
   const [profileStatusFilter, setProfileStatusFilter] = useState("All");
   const [profileCategoryFilter, setProfileCategoryFilter] = useState("All");
+  const [profileSelectedCategories, setProfileSelectedCategories] = useState(
+    [],
+  );
   const [profileYearFilter, setProfileYearFilter] = useState("All");
   const [profileMinRating, setProfileMinRating] = useState(0);
+  const [profileMinAudienceRating, setProfileMinAudienceRating] = useState(0);
 
   const profileCategories = useMemo(
     () =>
@@ -190,12 +194,22 @@ export const Profile = () => {
       )
         return false;
 
+      // Categories: if explicit multi-select is used, require at least one match
       if (
+        Array.isArray(profileSelectedCategories) &&
+        profileSelectedCategories.length > 0
+      ) {
+        const has = (a.categories || []).some((c) =>
+          profileSelectedCategories.includes(c),
+        );
+        if (!has) return false;
+      } else if (
         profileCategoryFilter &&
         profileCategoryFilter !== "All" &&
         !(a.categories || []).includes(profileCategoryFilter)
-      )
+      ) {
         return false;
+      }
 
       if (profileYearFilter && profileYearFilter !== "All") {
         const year = a.release_date
@@ -205,6 +219,11 @@ export const Profile = () => {
       }
 
       if ((a.rating || 0) < profileMinRating) return false;
+      if (
+        profileMinAudienceRating > 0 &&
+        (a.audience_rating || 0) < profileMinAudienceRating
+      )
+        return false;
 
       if (!q) return true;
       const inTitle = (a.title || "").toLowerCase().includes(q);
@@ -219,8 +238,10 @@ export const Profile = () => {
     profileQuery,
     profileStatusFilter,
     profileCategoryFilter,
+    profileSelectedCategories,
     profileYearFilter,
     profileMinRating,
+    profileMinAudienceRating,
   ]);
 
   const checkUsername = async (username) => {
@@ -373,16 +394,18 @@ export const Profile = () => {
           animate={{ opacity: 1, y: 0 }}
           className="sticky top-0 z-40 backdrop-blur-md bg-dark-900/80 border-b border-accent-blue/20"
         >
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center gap-4">
+          <div className="max-w-6xl mx-auto grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 sm:px-6 lg:px-8 py-4">
             <button
               onClick={() => navigate("/dashboard")}
-              className="flex items-center gap-2 text-accent-blue hover:text-accent-blue/70 transition-all duration-300 hover:scale-105"
+              className="justify-self-start flex items-center gap-2 text-accent-blue hover:text-accent-blue/70 transition-all duration-300 hover:scale-105"
             >
               <ArrowLeft size={20} />
-              Back to Tracker
+              Back
             </button>
-            <h2 className="text-xl font-bold text-dark-50">Profile</h2>
-            <div className="w-20" />
+            <h2 className="justify-self-center text-xl font-bold text-dark-50 text-center">
+              Profile
+            </h2>
+            <div aria-hidden="true" />
           </div>
         </motion.div>
 
@@ -446,11 +469,11 @@ export const Profile = () => {
                       )}
                     </div>
 
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-sm text-dark-400 mb-2 flex items-center gap-2">
                         <Shield size={14} /> Shared profile page
                       </p>
-                      <h1 className="text-3xl font-bold text-white mb-2">
+                      <h1 className="max-w-full break-words text-3xl font-bold leading-tight text-white mb-2">
                         {profile.username}
                       </h1>
                       <p className="text-dark-300 text-sm mb-3 break-all">
@@ -557,13 +580,17 @@ export const Profile = () => {
                       searchQuery: profileQuery,
                       selectedStatus: profileStatusFilter,
                       selectedCategory: profileCategoryFilter,
+                      selectedCategories: profileSelectedCategories,
                       selectedYear: profileYearFilter,
                       minRating: profileMinRating,
+                      minAudienceRating: profileMinAudienceRating,
                       setSearchQuery: setProfileQuery,
                       setSelectedStatus: setProfileStatusFilter,
                       setSelectedCategory: setProfileCategoryFilter,
+                      setSelectedCategories: setProfileSelectedCategories,
                       setSelectedYear: setProfileYearFilter,
                       setMinRating: setProfileMinRating,
+                      setMinAudienceRating: setProfileMinAudienceRating,
                     }}
                   />
 
@@ -599,13 +626,13 @@ export const Profile = () => {
         animate={{ opacity: 1, y: 0 }}
         className="sticky top-0 z-40 backdrop-blur-md bg-dark-900/80 border-b border-accent-blue/20"
       >
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center gap-4">
           <button
             onClick={() => navigate("/dashboard")}
             className="flex items-center gap-2 text-accent-blue hover:text-accent-blue/70 transition-all duration-300 hover:scale-105"
           >
             <ArrowLeft size={20} />
-            Back to Tracker
+            Back
           </button>
           <h2 className="text-xl font-bold text-dark-50">Profile Settings</h2>
           <div className="w-20"></div>
@@ -664,7 +691,7 @@ export const Profile = () => {
               </label>
             </div>
 
-            <h1 className="text-2xl font-bold text-white mb-2">
+            <h1 className="max-w-full break-words text-2xl font-bold leading-tight text-white mb-2">
               {profile?.username || "Not Set"}
             </h1>
             <p className="text-dark-300 text-sm mb-6 break-all">

@@ -304,10 +304,26 @@ export const Dashboard = () => {
       </motion.header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 py-8">
+        {/* Add button moved into FilterBar to align widths with the search box */}
+
+        <div className="w-full">
+          <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8">
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={openAddModal}
+              className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-accent-blue px-6 py-3 text-sm font-semibold text-white transition-all duration-200 hover:bg-blue-600"
+            >
+              <Plus size={18} />
+              Add Anime
+            </motion.button>
+          </div>
+        </div>
+
         <FilterBar
           allCategories={allCategories}
           allYears={allYears}
-          onAddAnime={openAddModal}
+          showAddButton={false}
         />
 
         {/* Bookmarks and activity moved to /bookmarks page per request */}
@@ -318,33 +334,39 @@ export const Dashboard = () => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.1 }}
-          className="grid grid-cols-2 sm:grid-cols-4 gap-4"
+          className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
         >
           {[
             {
-              label: "Total",
-              count: entries.length,
+              label: "Total Anime",
+              count: filteredEntries.length,
               color: "accent-blue",
             },
             {
-              label: "Watching",
-              count: entries.filter((e) => e.status === "Watching").length,
+              label: "Currently Watching",
+              count: filteredEntries.filter((e) => e.status === "Watching")
+                .length,
               color: "accent-green",
             },
             {
               label: "Completed",
-              count: entries.filter((e) => e.status === "Completed").length,
+              count: filteredEntries.filter((e) => e.status === "Completed")
+                .length,
               color: "accent-orange",
             },
             {
-              label: "Avg Rating",
+              label: "Average Rating",
               count:
-                entries.length > 0
+                filteredEntries.filter((entry) => (entry.rating || 0) > 0)
+                  .length > 0
                   ? (
-                      entries.reduce((sum, e) => sum + e.rating, 0) /
-                      entries.length
+                      filteredEntries
+                        .filter((entry) => (entry.rating || 0) > 0)
+                        .reduce((sum, entry) => sum + (entry.rating || 0), 0) /
+                      filteredEntries.filter((entry) => (entry.rating || 0) > 0)
+                        .length
                     ).toFixed(1)
-                  : 0,
+                  : "-",
               color: "accent-purple",
             },
           ].map((stat, i) => {
@@ -369,7 +391,6 @@ export const Dashboard = () => {
                 className={`relative overflow-hidden rounded-lg p-4 border-2 backdrop-blur-sm transition-all duration-300 bg-dark-800 ${colorClass}`}
               >
                 <div className="relative z-10">
-                  <div className="text-2xl mb-2">{stat.icon}</div>
                   <p className="text-dark-400 text-sm font-medium">
                     {stat.label}
                   </p>

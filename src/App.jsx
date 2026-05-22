@@ -6,7 +6,11 @@ import {
   Navigate,
 } from "react-router-dom";
 import { useAuthStore } from "./store/store";
-import { getCurrentUser, supabase } from "./services/supabase";
+import {
+  getCurrentUser,
+  ensureUserProfile,
+  supabase,
+} from "./services/supabase";
 import { Login, Signup } from "./pages/Auth";
 import { Dashboard } from "./pages/Dashboard";
 import { Profile } from "./pages/Profile";
@@ -14,21 +18,23 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Bookmarks } from "./pages/Bookmarks";
 
 function App() {
-  const { isLoading, setUser, setLoading } = useAuthStore();
+  const { user, isLoading, setUser, setLoading } = useAuthStore();
 
   useEffect(() => {
+    let subscription;
+
     const initAuth = async () => {
       try {
         const user = await getCurrentUser();
         setUser(user);
 
         const {
-          data: { subscription },
+          data: { subscription: authSubscription },
         } = supabase.auth.onAuthStateChange((_event, session) => {
           setUser(session?.user || null);
         });
 
-        return () => subscription?.unsubscribe();
+        subscription = authSubscription;
       } catch (error) {
         console.error("Auth init error:", error);
         setLoading(false);
@@ -36,7 +42,17 @@ function App() {
     };
 
     initAuth();
+
+    return () => subscription?.unsubscribe();
   }, [setUser, setLoading]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    ensureUserProfile(user).catch((error) => {
+      console.error("Failed to ensure user profile:", error);
+    });
+  }, [user]);
 
   if (isLoading) {
     return (

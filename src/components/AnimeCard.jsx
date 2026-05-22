@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, ChevronUp, Trash2, Edit2 } from "lucide-react";
 import { RatingStars, Badge } from "./Common";
 import { useAnimeStore } from "../store/store";
@@ -13,9 +13,23 @@ export const AnimeCard = ({ anime, onEdit, onDelete, densityOverride }) => {
   const statusColors = {
     Watching: "cyan",
     Completed: "pink",
+    Planned: "purple",
     "Plan to Watch": "purple",
+    "On Hold": "cyan",
     Dropped: "pink",
   };
+  const normalizeStatus = (status) => {
+    if (status === "Plan to Watch") return "Planned";
+    return status || "Unknown";
+  };
+  const displayStatus = normalizeStatus(anime.status);
+  const getAudienceFloat = (val) => {
+    if (val === null || val === undefined) return null;
+    const n = Number(val);
+    if (Number.isNaN(n)) return null;
+    return n > 10 ? n / 10 : n;
+  };
+  const audienceFloat = getAudienceFloat(anime.audience_rating);
 
   const densityCategoryLimit =
     effectiveCardDensity === "superCondensed"
@@ -50,6 +64,7 @@ export const AnimeCard = ({ anime, onEdit, onDelete, densityOverride }) => {
   if (effectiveCardDensity === "superCondensed") {
     return (
       <motion.div
+        layout
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         whileHover={{ y: -3 }}
@@ -114,17 +129,24 @@ export const AnimeCard = ({ anime, onEdit, onDelete, densityOverride }) => {
             </h3>
 
             <p className="text-dark-300 text-sm sm:text-base font-medium">
-              Status: {anime.status || "Unknown"}
+              Status: {displayStatus}
             </p>
 
-            <div className="pt-0.5 overflow-x-auto">
-              {anime.rating > 0 ? (
-                <div className="min-w-max">
-                  <RatingStars rating={anime.rating} size="sm" />
-                </div>
-              ) : (
-                <span className="text-sm text-dark-500">No rating yet</span>
-              )}
+            <div className="space-y-1.5 pt-0.5">
+              <div className="overflow-x-auto">
+                {anime.rating > 0 ? (
+                  <div className="min-w-max">
+                    <RatingStars rating={anime.rating} size="sm" />
+                  </div>
+                ) : (
+                  <span className="text-sm text-dark-500">No rating yet</span>
+                )}
+              </div>
+              {audienceFloat !== null && audienceFloat > 0 ? (
+                <p className="text-xs text-dark-400">
+                  Audience rating: {audienceFloat.toFixed(1)}/10
+                </p>
+              ) : null}
             </div>
 
             {anime.notes && (
@@ -135,52 +157,58 @@ export const AnimeCard = ({ anime, onEdit, onDelete, densityOverride }) => {
               </p>
             )}
 
-            {isExpanded && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                className="overflow-hidden space-y-2 pt-1"
-              >
-                {(anime.categories || []).length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {(anime.categories || []).map((category) => (
-                      <Badge
-                        key={category}
-                        text={category}
-                        color="cyan"
-                        size="sm"
-                      />
-                    ))}
-                  </div>
-                )}
+            <AnimatePresence initial={false}>
+              {isExpanded && (
+                <motion.div
+                  key="super-condensed-details"
+                  layout
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.24, ease: "easeOut" }}
+                  className="overflow-hidden space-y-2 pt-1"
+                >
+                  {(anime.categories || []).length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {(anime.categories || []).map((category) => (
+                        <Badge
+                          key={category}
+                          text={category}
+                          color="cyan"
+                          size="sm"
+                        />
+                      ))}
+                    </div>
+                  )}
 
-                <div className="space-y-1 text-xs text-dark-300">
-                  {anime.episodes && (
-                    <p>
-                      <span className="text-dark-400 font-semibold">
-                        Episodes:
-                      </span>{" "}
-                      {anime.episodes}
-                    </p>
-                  )}
-                  {anime.release_date && (
-                    <p>
-                      <span className="text-dark-400 font-semibold">
-                        Released:
-                      </span>{" "}
-                      {new Date(anime.release_date).toLocaleDateString(
-                        "en-US",
-                        {
-                          year: "numeric",
-                          month: "short",
-                          day: "numeric",
-                        },
-                      )}
-                    </p>
-                  )}
-                </div>
-              </motion.div>
-            )}
+                  <div className="space-y-1 text-xs text-dark-300">
+                    {anime.episodes && (
+                      <p>
+                        <span className="text-dark-400 font-semibold">
+                          Episodes:
+                        </span>{" "}
+                        {anime.episodes}
+                      </p>
+                    )}
+                    {anime.release_date && (
+                      <p>
+                        <span className="text-dark-400 font-semibold">
+                          Released:
+                        </span>{" "}
+                        {new Date(anime.release_date).toLocaleDateString(
+                          "en-US",
+                          {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                          },
+                        )}
+                      </p>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       </motion.div>
@@ -189,6 +217,7 @@ export const AnimeCard = ({ anime, onEdit, onDelete, densityOverride }) => {
 
   return (
     <motion.div
+      layout
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -8 }}
@@ -292,8 +321,8 @@ export const AnimeCard = ({ anime, onEdit, onDelete, densityOverride }) => {
             className={`flex flex-wrap gap-1.5 ${effectiveCardDensity === "superCondensed" ? "min-h-[2rem]" : "min-h-[2.5rem]"} items-start content-start`}
           >
             <Badge
-              text={anime.status}
-              color={statusColors[anime.status] || "purple"}
+              text={displayStatus}
+              color={statusColors[displayStatus] || "purple"}
             />
             {densityVisibleCategories.map((category) => (
               <Badge key={category} text={category} color="cyan" size="sm" />
@@ -322,7 +351,7 @@ export const AnimeCard = ({ anime, onEdit, onDelete, densityOverride }) => {
         >
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-wide text-accent-blue mb-1">
-              Rating
+              Your Rating
             </p>
             <p className="text-sm text-dark-300">
               {anime.rating > 0 ? `${anime.rating}/10` : "Not rated"}
@@ -337,54 +366,84 @@ export const AnimeCard = ({ anime, onEdit, onDelete, densityOverride }) => {
           </div>
         </div>
 
-        {effectiveCardDensity !== "superCondensed" && (
-          <div
-            className={`rounded-lg border border-dark-700 bg-dark-800/40 px-3 py-2 overflow-hidden ${showExpandedDetails ? "min-h-[4.5rem]" : "h-[4.5rem]"}`}
-          >
-            <p className="text-xs font-semibold uppercase tracking-wide text-dark-400 mb-1">
-              Notes
-            </p>
-            <p
-              className={`text-dark-400 text-xs italic whitespace-pre-wrap ${showExpandedDetails ? "line-clamp-none" : "line-clamp-2"}`}
+        <div
+          className={`rounded-lg border border-dark-700 bg-dark-800/45 px-3 py-2 ${effectiveCardDensity === "superCondensed" ? "min-h-[3.25rem]" : "min-h-[3.5rem]"}`}
+        >
+          <p className="text-xs font-semibold uppercase tracking-wide text-dark-400 mb-1">
+            Audience Rating
+          </p>
+          <p className="text-sm text-dark-300">
+            {audienceFloat !== null && audienceFloat > 0
+              ? `${audienceFloat.toFixed(1)}/10`
+              : "Not available"}
+          </p>
+        </div>
+
+        <AnimatePresence initial={false}>
+          {effectiveCardDensity !== "superCondensed" && (
+            <motion.div
+              key={isExpanded ? "notes-expanded" : "notes-collapsed"}
+              layout
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.24, ease: "easeOut" }}
+              className={`rounded-lg border border-dark-700 bg-dark-800/40 px-3 py-2 overflow-hidden ${showExpandedDetails ? "min-h-[4.5rem]" : "h-[4.5rem]"}`}
             >
-              {anime.notes || "No notes added"}
-            </p>
-          </div>
-        )}
-
-        {showExpandedDetails && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden space-y-2 pt-1"
-          >
-            <div className="space-y-2 text-xs text-dark-300">
-              {anime.episodes && (
-                <p>
-                  <span className="text-dark-400 font-semibold">Episodes:</span>{" "}
-                  {anime.episodes}
-                </p>
-              )}
-              {anime.release_date && (
-                <p>
-                  <span className="text-dark-400 font-semibold">Released:</span>{" "}
-                  {new Date(anime.release_date).toLocaleDateString("en-US", {
-                    year: "numeric",
-                    month: "short",
-                    day: "numeric",
-                  })}
-                </p>
-              )}
-            </div>
-
-            {effectiveCardDensity !== "expanded" && (
-              <p className="text-xs text-dark-500">
-                Click the card again to collapse.
+              <p className="text-xs font-semibold uppercase tracking-wide text-dark-400 mb-1">
+                Notes
               </p>
-            )}
-          </motion.div>
-        )}
+              <p
+                className={`text-dark-400 text-xs italic whitespace-pre-wrap ${showExpandedDetails ? "line-clamp-none" : "line-clamp-2"}`}
+              >
+                {anime.notes || "No notes added"}
+              </p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence initial={false}>
+          {showExpandedDetails && (
+            <motion.div
+              key="expanded-details"
+              layout
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.24, ease: "easeOut" }}
+              className="overflow-hidden space-y-2 pt-1"
+            >
+              <div className="space-y-2 text-xs text-dark-300">
+                {anime.episodes && (
+                  <p>
+                    <span className="text-dark-400 font-semibold">
+                      Episodes:
+                    </span>{" "}
+                    {anime.episodes}
+                  </p>
+                )}
+                {anime.release_date && (
+                  <p>
+                    <span className="text-dark-400 font-semibold">
+                      Released:
+                    </span>{" "}
+                    {new Date(anime.release_date).toLocaleDateString("en-US", {
+                      year: "numeric",
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </p>
+                )}
+              </div>
+
+              {effectiveCardDensity !== "expanded" && (
+                <p className="text-xs text-dark-500">
+                  Click the card again to collapse.
+                </p>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </motion.div>
   );

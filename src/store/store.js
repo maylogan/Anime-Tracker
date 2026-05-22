@@ -17,8 +17,10 @@ export const useAnimeStore = create((set, get) => ({
   searchQuery: "",
   selectedStatus: "All",
   selectedCategory: "All",
+  selectedCategories: [],
   selectedYear: "All",
   minRating: 0,
+  minAudienceRating: 0,
   cardDensity: "superCondensed",
 
   setEntries: (entries) => set({ entries }),
@@ -26,8 +28,11 @@ export const useAnimeStore = create((set, get) => ({
   setSearchQuery: (query) => set({ searchQuery: query }),
   setSelectedStatus: (status) => set({ selectedStatus: status }),
   setSelectedCategory: (category) => set({ selectedCategory: category }),
+  setSelectedCategories: (categories) =>
+    set({ selectedCategories: categories }),
   setSelectedYear: (year) => set({ selectedYear: year }),
   setMinRating: (rating) => set({ minRating: rating }),
+  setMinAudienceRating: (rating) => set({ minAudienceRating: rating }),
   setCardDensity: (cardDensity) => set({ cardDensity }),
 
   addEntry: (entry) => {
@@ -53,20 +58,50 @@ export const useAnimeStore = create((set, get) => ({
       searchQuery,
       selectedStatus,
       selectedCategory,
+      selectedCategories,
       selectedYear,
       minRating,
+      minAudienceRating,
     } = get();
 
+    const normalizeStatus = (status) => {
+      if (!status) return "";
+      if (status === "Plan to Watch") return "Planned";
+      return status;
+    };
+
+    const activeCategories = Array.isArray(selectedCategories)
+      ? selectedCategories.filter((category) => category && category !== "All")
+      : [];
+
     const filtered = entries.filter((entry) => {
+      const entryStatus = normalizeStatus(entry.status);
       const matchesSearch = entry.title
         .toLowerCase()
         .includes(searchQuery.toLowerCase());
       const matchesStatus =
-        selectedStatus === "All" || entry.status === selectedStatus;
+        selectedStatus === "All" || entryStatus === selectedStatus;
+      const entryCategories = entry.categories || [];
       const matchesCategory =
-        selectedCategory === "All" ||
-        entry.categories.includes(selectedCategory);
-      const matchesRating = entry.rating >= minRating;
+        activeCategories.length > 0
+          ? activeCategories.some((category) =>
+              entryCategories.includes(category),
+            )
+          : selectedCategory === "All" ||
+            entryCategories.includes(selectedCategory);
+      const matchesRating = (entry.rating || 0) >= minRating;
+
+      const getAudienceFloat = (val) => {
+        if (val === null || val === undefined) return null;
+        const n = Number(val);
+        if (Number.isNaN(n)) return null;
+        return n > 10 ? n / 10 : n;
+      };
+
+      const entryAudience = getAudienceFloat(entry.audience_rating);
+      const matchesAudienceRating =
+        minAudienceRating <= 0 ||
+        (entryAudience !== null && entryAudience >= minAudienceRating);
       const matchesYear =
         selectedYear === "All" ||
         (entry.release_date &&
@@ -78,6 +113,7 @@ export const useAnimeStore = create((set, get) => ({
         matchesStatus &&
         matchesCategory &&
         matchesRating &&
+        matchesAudienceRating &&
         matchesYear
       );
     });

@@ -13,9 +13,18 @@ export const getCurrentUser = async () => {
 };
 
 export const addAnimeEntry = async (entry) => {
+  // Avoid sending keys with null/undefined values that might not exist in DB schema
+  const payload = { ...entry };
+  if (
+    payload.audience_rating === null ||
+    payload.audience_rating === undefined
+  ) {
+    delete payload.audience_rating;
+  }
+
   const { data, error } = await supabase
     .from("anime_entries")
-    .insert([entry])
+    .insert([payload])
     .select();
 
   if (error) throw error;
@@ -34,9 +43,17 @@ export const getAnimeEntries = async (userId) => {
 };
 
 export const updateAnimeEntry = async (id, updates) => {
+  const payload = { ...updates };
+  if (
+    payload.audience_rating === null ||
+    payload.audience_rating === undefined
+  ) {
+    delete payload.audience_rating;
+  }
+
   const { data, error } = await supabase
     .from("anime_entries")
-    .update({ ...updates, updated_at: new Date().toISOString() })
+    .update({ ...payload, updated_at: new Date().toISOString() })
     .eq("id", id)
     .select();
 
@@ -102,6 +119,17 @@ const isUuid = (value) =>
     value.trim(),
   );
 
+const normalizeFallbackUsername = (value, userId) => {
+  const cleaned = (value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^[-_]+|[-_]+$/g, "");
+
+  return cleaned || `user-${userId.slice(0, 8)}`;
+};
+
 export const getUserProfileByIdentifier = async (identifier) => {
   if (!identifier) return null;
 
@@ -117,13 +145,15 @@ export const getUserProfileByIdentifier = async (identifier) => {
 
 export const createUserProfile = async (userId, username) => {
   try {
+    const resolvedUsername = username?.trim() || `user-${userId.slice(0, 8)}`;
+
     // Use upsert so it doesn't fail if row already exists
     const { data, error } = await supabase
       .from("user_profiles")
       .upsert(
         {
           id: userId,
-          username: username.toLowerCase(),
+          username: resolvedUsername.toLowerCase(),
           created_at: new Date().toISOString(),
         },
         { onConflict: "id" },
@@ -145,6 +175,22 @@ export const createUserProfile = async (userId, username) => {
     }
     throw err;
   }
+};
+
+export const ensureUserProfile = async (user) => {
+  if (!user?.id) return null;
+
+  const existingProfile = await getUserProfile(user.id);
+  if (existingProfile) return existingProfile;
+
+  const fallbackUsername = normalizeFallbackUsername(
+    user.user_metadata?.username ||
+      user.user_metadata?.name ||
+      user.email?.split("@")[0],
+    user.id,
+  );
+
+  return createUserProfile(user.id, fallbackUsername);
 };
 
 export const updateUserProfile = async (userId, updates) => {

@@ -5,6 +5,7 @@ import { Eye, EyeOff, LogIn, UserPlus, AlertCircle, Check } from "lucide-react";
 import {
   supabase,
   createUserProfile,
+  ensureUserProfile,
   checkUsernameAvailable,
 } from "../services/supabase";
 import { useAuthStore } from "../store/store";
@@ -31,6 +32,7 @@ export const Login = () => {
 
       if (error) throw error;
 
+      await ensureUserProfile(data.user);
       setUser(data.user);
       navigate("/dashboard");
     } catch (err) {
@@ -213,6 +215,11 @@ export const Signup = () => {
       const { data, error: signupError } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          data: {
+            username: username.trim(),
+          },
+        },
       });
 
       if (signupError) throw signupError;

@@ -11,11 +11,24 @@ export const AnimeFormModal = ({
   onSubmit,
   initialData = null,
 }) => {
+  const normalizedInitialStatus =
+    initialData?.status === "Plan to Watch"
+      ? "Planned"
+      : initialData?.status || "Completed";
+  const normalizeAudience = (val) => {
+    if (val === null || val === undefined) return null;
+    const num = Number(val);
+    if (Number.isNaN(num)) return null;
+    return num > 10 ? num / 10 : num;
+  };
   const [title, setTitle] = useState(initialData?.title || "");
   const [posterUrl, setPosterUrl] = useState(initialData?.poster_url || "");
   const [categories, setCategories] = useState(initialData?.categories || []);
   const [rating, setRating] = useState(initialData?.rating || 0);
-  const [status, setStatus] = useState(initialData?.status || "Completed");
+  const [audienceRating, setAudienceRating] = useState(
+    normalizeAudience(initialData?.audience_rating || null),
+  );
+  const [status, setStatus] = useState(normalizedInitialStatus);
   const [notes, setNotes] = useState(initialData?.notes || "");
   const [episodes, setEpisodes] = useState(initialData?.episodes || "");
   const [releaseDate, setReleaseDate] = useState(
@@ -34,7 +47,8 @@ export const AnimeFormModal = ({
       setPosterUrl(initialData?.poster_url || "");
       setCategories(initialData?.categories || []);
       setRating(initialData?.rating || 0);
-      setStatus(initialData?.status || "Completed");
+      setAudienceRating(normalizeAudience(initialData?.audience_rating || null));
+      setStatus(normalizedInitialStatus);
       setNotes(initialData?.notes || "");
       setEpisodes(initialData?.episodes || "");
       setReleaseDate(initialData?.release_date || "");
@@ -64,6 +78,7 @@ export const AnimeFormModal = ({
     setCategories(formatted.categories);
     setEpisodes(formatted.episodes ? formatted.episodes.toString() : "");
     setReleaseDate(formatted.release_date || "");
+    setAudienceRating(normalizeAudience(formatted.audience_rating || null));
     setSearchQuery("");
     setSearchResults([]);
   };
@@ -87,11 +102,18 @@ export const AnimeFormModal = ({
     }
 
     try {
+      // Convert audience rating to SMALLINT tenths for DB (e.g., 8.7 -> 87)
+      const audience_payload =
+        audienceRating === null || audienceRating === undefined
+          ? null
+          : Math.round(Number(audienceRating) * 10);
+
       onSubmit({
         title,
         poster_url: posterUrl,
         categories,
         rating,
+        audience_rating: audience_payload,
         status,
         notes,
         episodes: episodes ? parseInt(episodes) : null,
@@ -231,7 +253,7 @@ export const AnimeFormModal = ({
 
           <div>
             <label className="block text-sm font-semibold mb-2 text-accent-blue">
-              Rating
+              Your Rating
             </label>
             <RatingStars
               rating={rating}
@@ -239,6 +261,11 @@ export const AnimeFormModal = ({
               interactive
               size="lg"
             />
+            {audienceRating ? (
+              <p className="mt-2 text-xs text-dark-400">
+                Audience rating: {audienceRating}/10
+              </p>
+            ) : null}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -279,7 +306,8 @@ export const AnimeFormModal = ({
             >
               <option>Watching</option>
               <option>Completed</option>
-              <option>Plan to Watch</option>
+              <option>Planned</option>
+              <option>On Hold</option>
               <option>Dropped</option>
             </select>
           </div>
