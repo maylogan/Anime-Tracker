@@ -162,6 +162,13 @@ export const Profile = () => {
   const [profileMinRating, setProfileMinRating] = useState(0);
   const [profileMinAudienceRating, setProfileMinAudienceRating] = useState(0);
 
+  const getAudienceFloat = (value) => {
+    if (value === null || value === undefined) return null;
+    const numericValue = Number(value);
+    if (Number.isNaN(numericValue)) return null;
+    return numericValue > 10 ? numericValue / 10 : numericValue;
+  };
+
   const profileCategories = useMemo(
     () =>
       Array.from(
@@ -219,11 +226,13 @@ export const Profile = () => {
       }
 
       if ((a.rating || 0) < profileMinRating) return false;
+      const audienceRating = getAudienceFloat(a.audience_rating);
       if (
         profileMinAudienceRating > 0 &&
-        (a.audience_rating || 0) < profileMinAudienceRating
-      )
+        (audienceRating === null || audienceRating < profileMinAudienceRating)
+      ) {
         return false;
+      }
 
       if (!q) return true;
       const inTitle = (a.title || "").toLowerCase().includes(q);
@@ -243,6 +252,10 @@ export const Profile = () => {
     profileMinRating,
     profileMinAudienceRating,
   ]);
+
+  const profileRatingLabel = profile?.username
+    ? `${profile.username}'s Rating`
+    : "Your Rating";
 
   const checkUsername = async (username) => {
     if (!username.trim()) {
@@ -576,6 +589,7 @@ export const Profile = () => {
                     showAddButton={false}
                     showCardDensity={false}
                     searchPlaceholder="Search anime in this collection by title"
+                    ratingLabel={profileRatingLabel}
                     filters={{
                       searchQuery: profileQuery,
                       selectedStatus: profileStatusFilter,

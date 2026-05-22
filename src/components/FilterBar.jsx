@@ -37,6 +37,7 @@ export const FilterBar = ({
   showAddButton = true,
   showCardDensity = true,
   searchPlaceholder = "Search your anime list...",
+  ratingLabel = "Your Rating",
   filters,
 }) => {
   const storeFilters = useAnimeStore();
@@ -198,7 +199,7 @@ export const FilterBar = ({
           </div>
         ) : null}
 
-        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto_auto] xl:items-center">
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
           <div className="relative">
             <Search
               className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-accent-blue"
@@ -233,16 +234,6 @@ export const FilterBar = ({
             ) : null}
           </motion.button>
 
-          <motion.button
-            type="button"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={applyDraftFilters}
-            className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-accent-blue px-5 text-sm font-semibold text-white transition-all duration-200 hover:bg-blue-600"
-          >
-            Apply Filters
-            <Check size={16} />
-          </motion.button>
         </div>
 
         {/* Add button moved above the search box and centered */}
@@ -315,7 +306,7 @@ export const FilterBar = ({
 
                 <div>
                   <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-accent-blue">
-                    Your Rating
+                    {ratingLabel}
                   </label>
                   <select
                     value={draftMinRating}
