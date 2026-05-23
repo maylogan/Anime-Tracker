@@ -177,6 +177,15 @@ export const FilterBar = ({
     );
   };
 
+  const handleSearchChange = (value) => {
+    setDraftSearchQuery(value);
+    setSearchQuery(value);
+
+    if (!filters && typeof filterEntries === "function") {
+      filterEntries({ searchQuery: value });
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: -10 }}
@@ -208,7 +217,7 @@ export const FilterBar = ({
             <input
               type="text"
               value={draftSearchQuery}
-              onChange={(e) => setDraftSearchQuery(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               placeholder={searchPlaceholder}
               className="w-full rounded-xl border border-dark-700 bg-dark-800 px-11 py-3 text-sm text-dark-50 placeholder-dark-400 transition-all duration-200 focus:border-accent-blue focus:outline-none focus:ring-1 focus:ring-accent-blue/30"
             />
@@ -233,7 +242,6 @@ export const FilterBar = ({
               </span>
             ) : null}
           </motion.button>
-
         </div>
 
         {/* Add button moved above the search box and centered */}

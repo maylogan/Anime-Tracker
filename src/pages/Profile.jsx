@@ -25,6 +25,7 @@ import {
 } from "../services/supabase";
 import { AnimeCardGrid } from "../components/AnimeCard";
 import { FilterBar } from "../components/FilterBar";
+import { PaginationControls } from "../components/Common";
 import {
   isProfileBookmarked,
   toggleProfileBookmark,
@@ -101,16 +102,20 @@ export const Profile = () => {
     };
   }, [user, identifier, isPublicProfile, navigate]);
 
-  useEffect(() => {
-    setBio(profile?.bio || "");
-  }, [profile]);
-
   const stats = useMemo(() => {
     if (!profileAnime || profileAnime.length === 0)
       return {
         totalWatched: 0,
         avgRating: 0,
         favoriteGenre: null,
+        completionRate: 0,
+        topStatus: null,
+        runnerUpStatus: null,
+        runnerUpGenre: null,
+        topGenres: [],
+        recentAdds: 0,
+        highRatedCount: 0,
+        highestRated: null,
       };
 
     const totalWatched = profileAnime.filter(
@@ -124,18 +129,59 @@ export const Profile = () => {
         ? rated.reduce((s, r) => s + (r.rating || 0), 0) / rated.length
         : 0;
 
+    const completionRate = Math.round(
+      (totalWatched / profileAnime.length) * 100,
+    );
+
+    const statusCounts = {};
+    profileAnime.forEach((a) => {
+      const status =
+        a.status === "Plan to Watch" ? "Planned" : a.status || "Unknown";
+      statusCounts[status] = (statusCounts[status] || 0) + 1;
+    });
+    const rankedStatuses = Object.entries(statusCounts).sort(
+      (a, b) => b[1] - a[1],
+    );
+    const topStatus = rankedStatuses[0]?.[0] || null;
+    const runnerUpStatus = rankedStatuses[1]?.[0] || null;
+
     const genreCounts = {};
     profileAnime.forEach((a) => {
       (a.categories || []).forEach((g) => {
         genreCounts[g] = (genreCounts[g] || 0) + 1;
       });
     });
-    const favoriteGenre =
-      Object.keys(genreCounts).length > 0
-        ? Object.entries(genreCounts).sort((a, b) => b[1] - a[1])[0][0]
-        : null;
+    const rankedGenres = Object.entries(genreCounts).sort(
+      (a, b) => b[1] - a[1],
+    );
+    const favoriteGenre = rankedGenres.length > 0 ? rankedGenres[0][0] : null;
+    const runnerUpGenre = rankedGenres[1]?.[0] || null;
+    const topGenres = rankedGenres.slice(0, 3);
 
-    return { totalWatched, avgRating, favoriteGenre };
+    const recentWindow = new Date();
+    recentWindow.setDate(recentWindow.getDate() - 30);
+    const recentAdds = profileAnime.filter((a) => {
+      if (!a.created_at) return false;
+      return new Date(a.created_at) >= recentWindow;
+    }).length;
+
+    const highRatedCount = rated.filter((a) => (a.rating || 0) >= 8).length;
+    const highestRated =
+      [...rated].sort((a, b) => (b.rating || 0) - (a.rating || 0))[0] || null;
+
+    return {
+      totalWatched,
+      avgRating,
+      favoriteGenre,
+      completionRate,
+      topStatus,
+      runnerUpStatus,
+      runnerUpGenre,
+      topGenres,
+      recentAdds,
+      highRatedCount,
+      highestRated,
+    };
   }, [profileAnime]);
 
   const handleSaveBio = async () => {
@@ -161,6 +207,8 @@ export const Profile = () => {
   const [profileYearFilter, setProfileYearFilter] = useState("All");
   const [profileMinRating, setProfileMinRating] = useState(0);
   const [profileMinAudienceRating, setProfileMinAudienceRating] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
 
   const getAudienceFloat = (value) => {
     if (value === null || value === undefined) return null;
@@ -236,11 +284,7 @@ export const Profile = () => {
 
       if (!q) return true;
       const inTitle = (a.title || "").toLowerCase().includes(q);
-      const inNotes = (a.notes || "").toLowerCase().includes(q);
-      const inCats = (a.categories || []).some((c) =>
-        c.toLowerCase().includes(q),
-      );
-      return inTitle || inNotes || inCats;
+      return inTitle;
     });
   }, [
     profileAnime,
@@ -252,6 +296,34 @@ export const Profile = () => {
     profileMinRating,
     profileMinAudienceRating,
   ]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredProfileAnime.length / itemsPerPage),
+  );
+
+  const paginatedProfileAnime = filteredProfileAnime.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage,
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    identifier,
+    profileAnime.length,
+    profileQuery,
+    profileStatusFilter,
+    profileCategoryFilter,
+    profileSelectedCategories,
+    profileYearFilter,
+    profileMinRating,
+    profileMinAudienceRating,
+  ]);
+
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(page, totalPages));
+  }, [totalPages]);
 
   const profileRatingLabel = profile?.username
     ? `${profile.username}'s Rating`
@@ -505,34 +577,6 @@ export const Profile = () => {
                           No bio provided
                         </p>
                       )}
-                      <div className="flex flex-wrap items-center gap-2 sm:gap-4">
-                        <p className="text-dark-400 text-xs sm:text-sm">
-                          {profileAnime.length} anime in collection
-                        </p>
-                        <div className="text-dark-400 text-xs sm:text-sm">
-                          •
-                        </div>
-                        <p className="text-dark-400 text-xs sm:text-sm">
-                          Watched: {stats.totalWatched}
-                        </p>
-                        <div className="text-dark-400 text-xs sm:text-sm">
-                          •
-                        </div>
-                        <p className="text-dark-400 text-xs sm:text-sm">
-                          Avg:{" "}
-                          {stats.avgRating ? stats.avgRating.toFixed(1) : "-"}
-                        </p>
-                        {stats.favoriteGenre && (
-                          <>
-                            <div className="text-dark-400 text-xs sm:text-sm">
-                              •
-                            </div>
-                            <p className="text-dark-400 text-xs sm:text-sm">
-                              Fav: {stats.favoriteGenre}
-                            </p>
-                          </>
-                        )}
-                      </div>
                     </div>
                   </div>
 
@@ -566,6 +610,146 @@ export const Profile = () => {
                   </div>
                 </div>
               </motion.section>
+
+              {isPublicProfile && profileAnime.length > 0 ? (
+                <motion.section
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className="card-base p-6 sm:p-7"
+                >
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between mb-5">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-blue">
+                        Public summary
+                      </p>
+                      <h3 className="text-xl font-bold text-dark-50 mt-1">
+                        Collection at a glance
+                      </h3>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    {[
+                      {
+                        label: "Completion rate",
+                        value: `${stats.completionRate}%`,
+                        detail: `${stats.totalWatched} completed titles`,
+                      },
+                      {
+                        label: "Average rating",
+                        value: stats.avgRating
+                          ? stats.avgRating.toFixed(1)
+                          : "-",
+                        detail: `${profileAnime.filter((a) => (a.rating || 0) > 0).length} rated entries`,
+                      },
+                      {
+                        label: "Favorite genre",
+                        value: stats.favoriteGenre || "-",
+                        detail: stats.runnerUpGenre
+                          ? `Next: ${stats.runnerUpGenre}`
+                          : "No runner-up yet",
+                      },
+                      {
+                        label: "Top status",
+                        value: stats.topStatus || "-",
+                        detail: stats.runnerUpStatus
+                          ? `Next: ${stats.runnerUpStatus}`
+                          : "Single status profile",
+                      },
+                    ].map((item) => (
+                      <div
+                        key={item.label}
+                        className="rounded-2xl border border-dark-700 bg-dark-900/60 p-4"
+                      >
+                        <p className="text-xs font-semibold uppercase tracking-wide text-dark-400">
+                          {item.label}
+                        </p>
+                        <p className="mt-2 text-2xl font-bold text-dark-50 break-words">
+                          {item.value}
+                        </p>
+                        <p className="mt-1 text-xs text-dark-400">
+                          {item.detail}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                    <div className="rounded-2xl border border-dark-700 bg-dark-900/50 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-accent-blue">
+                        Ranked genres
+                      </p>
+                      <div className="mt-3 space-y-2 text-sm text-dark-300">
+                        {stats.topGenres.length > 0 ? (
+                          stats.topGenres.map(([genre, count], index) => (
+                            <div
+                              key={genre}
+                              className="flex items-center justify-between gap-3 rounded-lg bg-black/10 px-3 py-2"
+                            >
+                              <span>
+                                {index + 1}. {genre}
+                              </span>
+                              <span className="text-dark-400">{count}</span>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-dark-400">No genre data yet.</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-dark-700 bg-dark-900/50 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-accent-blue">
+                        Rating snapshot
+                      </p>
+                      <div className="mt-3 space-y-2 text-sm text-dark-300">
+                        <div className="flex items-center justify-between rounded-lg bg-black/10 px-3 py-2">
+                          <span>8+/10 titles</span>
+                          <span className="text-dark-400">
+                            {stats.highRatedCount}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between rounded-lg bg-black/10 px-3 py-2">
+                          <span>Recent adds (30 days)</span>
+                          <span className="text-dark-400">
+                            {stats.recentAdds}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between rounded-lg bg-black/10 px-3 py-2">
+                          <span>Highest rated</span>
+                          <span className="text-dark-400 truncate max-w-[50%] text-right">
+                            {stats.highestRated?.title || "-"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-dark-700 bg-dark-900/50 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-accent-blue">
+                        Insight
+                      </p>
+                      <div className="mt-3 space-y-2 text-sm text-dark-300">
+                        <p className="rounded-lg bg-black/10 px-3 py-2">
+                          {stats.favoriteGenre
+                            ? `This profile leans most heavily toward ${stats.favoriteGenre}.`
+                            : "This profile has not built a genre pattern yet."}
+                        </p>
+                        <p className="rounded-lg bg-black/10 px-3 py-2">
+                          {stats.topStatus
+                            ? `Most entries are currently marked ${stats.topStatus}.`
+                            : "No dominant status yet."}
+                        </p>
+                        <p className="rounded-lg bg-black/10 px-3 py-2">
+                          {stats.highRatedCount > 0
+                            ? `${stats.highRatedCount} titles are rated 8/10 or higher.`
+                            : "No 8/10+ ratings yet."}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </motion.section>
+              ) : null}
 
               <div className="space-y-8">
                 <motion.section
@@ -618,11 +802,32 @@ export const Profile = () => {
                         collection.
                       </p>
                     </div>
+                  ) : filteredProfileAnime.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-dark-700 bg-dark-900/40 p-8 text-center text-dark-300">
+                      <p className="font-semibold text-dark-50 mb-1">
+                        No results for “{profileQuery}”
+                      </p>
+                      <p className="text-sm">
+                        Try a different title or clear the search to view the
+                        full collection.
+                      </p>
+                    </div>
                   ) : (
-                    <AnimeCardGrid
-                      anime={filteredProfileAnime}
-                      densityOverride="superCondensed"
-                    />
+                    <>
+                      <AnimeCardGrid
+                        anime={paginatedProfileAnime}
+                        densityOverride="superCondensed"
+                      />
+
+                      <PaginationControls
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        totalItems={filteredProfileAnime.length}
+                        pageSize={itemsPerPage}
+                        onPageChange={setCurrentPage}
+                        itemLabel="anime"
+                      />
+                    </>
                   )}
                 </motion.section>
               </div>

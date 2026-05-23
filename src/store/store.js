@@ -52,7 +52,7 @@ export const useAnimeStore = create((set, get) => ({
     set({ entries: entries.filter((e) => e.id !== id) });
   },
 
-  filterEntries: () => {
+  filterEntries: (overrides = {}) => {
     const {
       entries,
       searchQuery,
@@ -63,6 +63,11 @@ export const useAnimeStore = create((set, get) => ({
       minRating,
       minAudienceRating,
     } = get();
+
+    const effectiveSearchQuery =
+      typeof overrides === "string"
+        ? overrides
+        : (overrides.searchQuery ?? searchQuery);
 
     const normalizeStatus = (status) => {
       if (!status) return "";
@@ -78,7 +83,7 @@ export const useAnimeStore = create((set, get) => ({
       const entryStatus = normalizeStatus(entry.status);
       const matchesSearch = entry.title
         .toLowerCase()
-        .includes(searchQuery.toLowerCase());
+        .includes(String(effectiveSearchQuery).toLowerCase());
       const matchesStatus =
         selectedStatus === "All" || entryStatus === selectedStatus;
       const entryCategories = entry.categories || [];

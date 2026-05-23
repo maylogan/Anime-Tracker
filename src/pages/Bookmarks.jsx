@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Bookmark, ArrowLeft, ArrowRight } from "lucide-react";
+import { Bookmark, ArrowLeft, ArrowRight, Search, X } from "lucide-react";
 import { useAuthStore } from "../store/store";
 import {
   getProfileBookmarks,
@@ -17,6 +17,19 @@ export const Bookmarks = () => {
   const [bookmarks, setBookmarks] = useState([]);
   const [folders, setFolders] = useState([]);
   const [activity, setActivity] = useState([]);
+  const [pageQuery, setPageQuery] = useState("");
+
+  const filteredBookmarks = bookmarks.filter((bookmark) => {
+    const query = pageQuery.trim().toLowerCase();
+    if (!query) return true;
+
+    const username = (bookmark.username || "").toLowerCase();
+    const folderName = (
+      folders.find((folder) => folder.id === bookmark.folderId)?.name || ""
+    ).toLowerCase();
+
+    return username.includes(query) || folderName.includes(query);
+  });
 
   useEffect(() => {
     if (!user) return;
@@ -127,6 +140,26 @@ export const Bookmarks = () => {
               </p>
             </div>
             <div className="flex items-center gap-3">
+              <div className="w-64 hidden sm:block relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-400" />
+                <input
+                  type="text"
+                  value={pageQuery}
+                  onChange={(e) => setPageQuery(e.target.value)}
+                  placeholder="Search saved pages..."
+                  className="w-full pl-9 pr-10 py-2.5 bg-dark-800 border border-dark-700 rounded-lg text-dark-50 placeholder-dark-400 focus:outline-none focus:border-accent-blue transition-colors"
+                />
+                {pageQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setPageQuery("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-dark-400 hover:text-dark-200"
+                    aria-label="Clear saved page search"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
               <div className="w-48 hidden sm:block">
                 <UserSearch
                   onUserSelect={(u) => navigate(`/profile/${u.username}`)}
@@ -143,9 +176,13 @@ export const Bookmarks = () => {
               No pages bookmarked yet, search and follow a profile to add them!
               here.
             </div>
+          ) : filteredBookmarks.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-dark-700 bg-dark-900/40 p-6 text-dark-300">
+              No saved pages match your search.
+            </div>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {bookmarks.map((b) => (
+              {filteredBookmarks.map((b) => (
                 <button
                   key={b.id}
                   onClick={() => navigate(`/profile/${b.username}`)}

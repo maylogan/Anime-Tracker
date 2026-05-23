@@ -252,8 +252,74 @@ export const checkUsernameAvailable = async (username) => {
 
 export const uploadAvatar = async (userId, file) => {
   try {
+    // Client-side validation: restrict types and size
+    const allowedTypes = ["image/png", "image/jpeg", "image/webp"];
+    const maxBytes = 2 * 1024 * 1024; // 2MB
+
+    if (!file || !file.type) throw new Error("No file provided");
+    if (!allowedTypes.includes(file.type)) {
+      throw new Error("Invalid file type. Allowed: PNG, JPEG, WEBP");
+    }
+    if (file.size > maxBytes) {
+      throw new Error("File too large. Max size is 2MB");
+    }
+
+    // Optional: check image dimensions in browser (best-effort)
+    const checkImageDims = () =>
+      new Promise((resolve, reject) => {
+        try {
+          const img = new Image();
+          img.onload = () => {
+            // Prevent extremely large images (dimensions > 4000px)
+            if (img.width > 4000 || img.height > 4000) {
+              reject(new Error("Image dimensions too large (max 4000px)"));
+              return;
+            }
+            resolve();
+          };
+          img.onerror = () => reject(new Error("Failed to read image"));
+          img.src = URL.createObjectURL(file);
+        } catch (err) {
+          // If anything goes wrong, don't block upload — server will validate
+          resolve();
+        }
+      });
+
+    if (typeof window !== "undefined") {
+      await checkImageDims();
+    }
+
+    // If a secure upload endpoint is configured (e.g. Vercel Edge Function), use it
+    const uploadFn = import.meta.env.VITE_UPLOAD_FUNCTION_URL;
+    if (uploadFn) {
+      const fd = new FormData();
+      fd.append("avatar", file);
+      fd.append("userId", userId);
+
+      const res = await fetch(uploadFn, {
+        method: "POST",
+        body: fd,
+      });
+
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error((json && json.message) || "Upload failed on server");
+      }
+
+      // Server returns a signed public URL (or path) in `publicUrl`
+      const publicUrl = json?.publicUrl;
+      if (publicUrl) {
+        await updateUserProfile(userId, { avatar_url: publicUrl });
+        return publicUrl;
+      }
+      throw new Error("Upload succeeded but no public URL returned");
+    }
+
+    // Fallback: directly upload using anon key (not recommended for production)
     const fileName = `${userId}/${Date.now()}_${file.name}`;
-    console.log("Uploading avatar to:", fileName);
+    console.warn(
+      "No upload endpoint configured (VITE_UPLOAD_FUNCTION_URL). Falling back to direct upload with anon key. Consider deploying a server-side upload function and set VITE_UPLOAD_FUNCTION_URL.",
+    );
 
     const { error: uploadError } = await supabase.storage
       .from("profiles")
@@ -265,10 +331,7 @@ export const uploadAvatar = async (userId, file) => {
     }
 
     const { data } = supabase.storage.from("profiles").getPublicUrl(fileName);
-    console.log("Avatar public URL:", data.publicUrl);
-
     await updateUserProfile(userId, { avatar_url: data.publicUrl });
-
     return data.publicUrl;
   } catch (err) {
     console.error("Avatar upload error:", err.message || err);

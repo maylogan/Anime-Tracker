@@ -449,7 +449,14 @@ export const AnimeCard = ({ anime, onEdit, onDelete, densityOverride }) => {
   );
 };
 
-export const AnimeCardGrid = ({ anime, onEdit, onDelete, densityOverride }) => {
+export const AnimeCardGrid = ({
+  anime,
+  onEdit,
+  onDelete,
+  densityOverride,
+  emptyTitle = "No anime found",
+  emptyDescription = "Try adjusting your filters or add your first anime",
+}) => {
   const cardDensity = useAnimeStore((state) => state.cardDensity);
   const effectiveCardDensity = densityOverride || cardDensity;
 
@@ -459,9 +466,9 @@ export const AnimeCardGrid = ({ anime, onEdit, onDelete, densityOverride }) => {
         <div className="w-16 h-16 rounded-full bg-accent-blue/10 border-2 border-accent-blue/30 flex items-center justify-center mb-4 mx-auto">
           <div className="w-8 h-8 rounded-full bg-accent-blue/20"></div>
         </div>
-        <p className="text-2xl text-dark-50 font-bold mb-2">No anime found</p>
-        <p className="text-dark-400">
-          Try adding your first anime or adjusting your filters
+        <p className="text-2xl text-dark-50 font-bold mb-2">{emptyTitle}</p>
+        <p className="text-dark-400 text-center max-w-md px-4">
+          {emptyDescription}
         </p>
       </div>
     );

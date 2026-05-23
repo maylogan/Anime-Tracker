@@ -1,7 +1,18 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
-import { ArrowRight, Bookmark, LogOut, Plus } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  ArrowRight,
+  Bookmark,
+  LogOut,
+  Plus,
+  Sparkles,
+  TrendingUp,
+  CheckCircle2,
+  Star,
+  Layers3,
+  Clock3,
+} from "lucide-react";
 import { useAuthStore, useAnimeStore, useUIStore } from "../store/store";
 import { supabase } from "../services/supabase";
 import {
@@ -18,7 +29,11 @@ import {
 import { AnimeCardGrid } from "../components/AnimeCard";
 import { AnimeFormModal } from "../components/AnimeForm";
 import { FilterBar } from "../components/FilterBar";
-import { LoadingSkeleton, EmptyState } from "../components/Common";
+import {
+  LoadingSkeleton,
+  EmptyState,
+  PaginationControls,
+} from "../components/Common";
 import { UserSearch } from "../components/UserSearch";
 
 export const Dashboard = () => {
@@ -28,6 +43,13 @@ export const Dashboard = () => {
     entries,
     filteredEntries,
     isLoading,
+    searchQuery,
+    selectedStatus,
+    selectedCategory,
+    selectedCategories,
+    selectedYear,
+    minRating,
+    minAudienceRating,
     setEntries,
     setLoading,
     addEntry,
@@ -50,6 +72,19 @@ export const Dashboard = () => {
   const [followedPages, setFollowedPages] = useState([]);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [expandedStatIndex, setExpandedStatIndex] = useState(null);
+  const itemsPerPage = 20;
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredEntries.length / itemsPerPage),
+  );
+
+  const paginatedEntries = filteredEntries.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage,
+  );
 
   useEffect(() => {
     if (!user) {
@@ -169,6 +204,22 @@ export const Dashboard = () => {
     filterEntries();
   }, [entries, filterEntries]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    searchQuery,
+    selectedStatus,
+    selectedCategory,
+    selectedCategories,
+    selectedYear,
+    minRating,
+    minAudienceRating,
+  ]);
+
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(page, totalPages));
+  }, [totalPages]);
+
   const handleAddAnime = async (formData) => {
     try {
       console.log("Adding anime with data:", formData);
@@ -241,6 +292,173 @@ export const Dashboard = () => {
         .map((e) => new Date(e.release_date).getFullYear()),
     ),
   );
+
+  const dashboardStats = useMemo(() => {
+    const ratedEntries = filteredEntries.filter(
+      (entry) => (entry.rating || 0) > 0,
+    );
+    const highRatedEntries = ratedEntries.filter(
+      (entry) => (entry.rating || 0) >= 8,
+    );
+    const completedEntries = filteredEntries.filter(
+      (entry) => entry.status === "Completed",
+    );
+    const watchingEntries = filteredEntries.filter(
+      (entry) => entry.status === "Watching",
+    );
+    const plannedEntries = filteredEntries.filter(
+      (entry) => entry.status === "Planned" || entry.status === "Plan to Watch",
+    );
+
+    const normalizeStatus = (status) => {
+      if (!status) return "Unknown";
+      if (status === "Plan to Watch") return "Planned";
+      return status;
+    };
+
+    const statusCounts = {};
+    filteredEntries.forEach((entry) => {
+      const status = normalizeStatus(entry.status);
+      statusCounts[status] = (statusCounts[status] || 0) + 1;
+    });
+    const rankedStatuses = Object.entries(statusCounts).sort(
+      (a, b) => b[1] - a[1],
+    );
+    const topStatus = rankedStatuses[0]?.[0] || null;
+    const runnerUpStatus = rankedStatuses[1]?.[0] || null;
+
+    const genreCounts = {};
+    filteredEntries.forEach((entry) => {
+      (entry.categories || []).forEach((category) => {
+        genreCounts[category] = (genreCounts[category] || 0) + 1;
+      });
+    });
+    const rankedGenres = Object.entries(genreCounts).sort(
+      (a, b) => b[1] - a[1],
+    );
+    const favoriteGenre = rankedGenres.length > 0 ? rankedGenres[0][0] : null;
+    const runnerUpGenre = rankedGenres[1]?.[0] || null;
+    const topGenres = rankedGenres.slice(0, 3);
+
+    const recentAdds = filteredEntries.filter((entry) => {
+      if (!entry.created_at) return false;
+      const createdAt = new Date(entry.created_at);
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      return createdAt >= sevenDaysAgo;
+    }).length;
+
+    const completionRate =
+      filteredEntries.length > 0
+        ? Math.round((completedEntries.length / filteredEntries.length) * 100)
+        : 0;
+
+    return [
+      {
+        label: "Total Anime",
+        count: filteredEntries.length,
+        detail: "In your current view",
+        icon: Sparkles,
+        color: "accent-blue",
+        extra: [
+          `${entries.length} total in your collection`,
+          `${filteredEntries.length} currently matching filters`,
+          favoriteGenre ? `Top genre: ${favoriteGenre}` : "No genre data yet",
+          runnerUpGenre
+            ? `Next most popular: ${runnerUpGenre}`
+            : "Only one genre appears right now",
+        ],
+      },
+      {
+        label: "Watching",
+        count: watchingEntries.length,
+        detail: `${plannedEntries.length} planned`,
+        icon: TrendingUp,
+        color: "accent-green",
+        extra: [
+          `${watchingEntries.length} shows in progress`,
+          `${plannedEntries.length} queued up next`,
+          topStatus ? `Most common status: ${topStatus}` : "No status data yet",
+        ],
+      },
+      {
+        label: "Completed",
+        count: completedEntries.length,
+        detail: `${completionRate}% completion rate`,
+        icon: CheckCircle2,
+        color: "accent-orange",
+        extra: [
+          `${completedEntries.length} titles finished`,
+          `${completionRate}% of the current view is complete`,
+          runnerUpStatus
+            ? `Next most common status: ${runnerUpStatus}`
+            : "No secondary status yet",
+        ],
+      },
+      {
+        label: "Average Rating",
+        count:
+          ratedEntries.length > 0
+            ? (
+                ratedEntries.reduce(
+                  (sum, entry) => sum + (entry.rating || 0),
+                  0,
+                ) / ratedEntries.length
+              ).toFixed(1)
+            : "-",
+        detail:
+          ratedEntries.length > 0
+            ? `${ratedEntries.length} rated entries`
+            : "No ratings yet",
+        icon: Star,
+        color: "accent-purple",
+        extra: [
+          ratedEntries.length > 0
+            ? `Based on ${ratedEntries.length} rated entries`
+            : "Add ratings to see this metric grow",
+          ratedEntries.length > 0
+            ? `8+/10 ratings: ${highRatedEntries.length}`
+            : "",
+        ].filter(Boolean),
+      },
+      {
+        label: "Favorite Genre",
+        count: favoriteGenre || "-",
+        detail: favoriteGenre
+          ? `${genreCounts[favoriteGenre]} entries`
+          : "No genres yet",
+        icon: Layers3,
+        color: "accent-blue",
+        extra: [
+          favoriteGenre
+            ? `${genreCounts[favoriteGenre]} entries in ${favoriteGenre}`
+            : "No genre data yet",
+          runnerUpGenre
+            ? `Next most popular: ${runnerUpGenre}`
+            : "Only one genre appears right now",
+          topGenres.length > 0
+            ? `Top 3: ${topGenres
+                .map(([name, count]) => `${name} (${count})`)
+                .join(", ")}`
+            : "",
+        ].filter(Boolean),
+      },
+      {
+        label: "Last 7 Days",
+        count: recentAdds,
+        detail: "Recent additions",
+        icon: Clock3,
+        color: "accent-green",
+        extra: [
+          `${recentAdds} title${recentAdds === 1 ? "" : "s"} added recently`,
+          `Helps spot active periods in your collection`,
+          recentAdds > 0
+            ? `${Math.max(0, entries.length - recentAdds)} titles added earlier than this week`
+            : "No additions in the last 7 days",
+        ],
+      },
+    ];
+  }, [entries.length, filteredEntries]);
 
   return (
     <div className="min-h-screen bg-dark-900 pb-20">
@@ -334,42 +552,9 @@ export const Dashboard = () => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.1 }}
-          className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
+          className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3"
         >
-          {[
-            {
-              label: "Total Anime",
-              count: filteredEntries.length,
-              color: "accent-blue",
-            },
-            {
-              label: "Currently Watching",
-              count: filteredEntries.filter((e) => e.status === "Watching")
-                .length,
-              color: "accent-green",
-            },
-            {
-              label: "Completed",
-              count: filteredEntries.filter((e) => e.status === "Completed")
-                .length,
-              color: "accent-orange",
-            },
-            {
-              label: "Average Rating",
-              count:
-                filteredEntries.filter((entry) => (entry.rating || 0) > 0)
-                  .length > 0
-                  ? (
-                      filteredEntries
-                        .filter((entry) => (entry.rating || 0) > 0)
-                        .reduce((sum, entry) => sum + (entry.rating || 0), 0) /
-                      filteredEntries.filter((entry) => (entry.rating || 0) > 0)
-                        .length
-                    ).toFixed(1)
-                  : "-",
-              color: "accent-purple",
-            },
-          ].map((stat, i) => {
+          {dashboardStats.map((stat, i) => {
             const classNames = {
               "accent-blue":
                 "border-accent-blue/30 hover:border-accent-blue text-accent-blue",
@@ -381,21 +566,71 @@ export const Dashboard = () => {
                 "border-accent-purple/30 hover:border-accent-purple text-accent-purple",
             };
             const colorClass = classNames[stat.color];
+            const isExpanded = expandedStatIndex === i;
             return (
               <motion.div
                 key={i}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.1 }}
-                whileHover={{ scale: 1.02 }}
-                className={`relative overflow-hidden rounded-lg p-4 border-2 backdrop-blur-sm transition-all duration-300 bg-dark-800 ${colorClass}`}
+                whileHover={{ scale: 1.01 }}
+                layout
+                className={`relative overflow-hidden rounded-xl border-2 backdrop-blur-sm transition-all duration-300 bg-dark-800 ${colorClass}`}
               >
-                <div className="relative z-10">
-                  <p className="text-dark-400 text-sm font-medium">
-                    {stat.label}
-                  </p>
-                  <p className="text-3xl font-bold mt-1">{stat.count}</p>
-                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setExpandedStatIndex((current) =>
+                      current === i ? null : i,
+                    )
+                  }
+                  className="relative z-10 w-full p-3 text-left"
+                  aria-expanded={isExpanded}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-dark-400 text-xs font-medium uppercase tracking-wide">
+                        {stat.label}
+                      </p>
+                      <p className="text-2xl font-bold mt-1 break-words leading-none">
+                        {stat.count}
+                      </p>
+                      <p className="text-[11px] text-dark-400 mt-1 line-clamp-1">
+                        {stat.detail}
+                      </p>
+                    </div>
+                    <div className="shrink-0 rounded-lg border border-current/20 bg-black/10 p-2">
+                      <stat.icon size={16} />
+                    </div>
+                  </div>
+                </button>
+
+                <AnimatePresence initial={false}>
+                  {isExpanded ? (
+                    <motion.div
+                      key={`${stat.label}-details`}
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2, ease: "easeOut" }}
+                      className="overflow-hidden border-t border-current/15"
+                    >
+                      <div className="px-3 pb-3 pt-2 space-y-2 text-xs text-dark-300">
+                        {stat.extra.map((item, detailIndex) => (
+                          <div
+                            key={detailIndex}
+                            className="rounded-lg bg-black/10 px-3 py-2"
+                          >
+                            {item}
+                          </div>
+                        ))}
+                        <p className="text-[11px] text-dark-500">
+                          Click again to collapse.
+                        </p>
+                      </div>
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
               </motion.div>
             );
           })}
@@ -406,17 +641,51 @@ export const Dashboard = () => {
         ) : filteredEntries.length === 0 ? (
           <EmptyState />
         ) : (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.2 }}
-          >
-            <AnimeCardGrid
-              anime={filteredEntries}
-              onEdit={handleEditAnime}
-              onDelete={handleDeleteAnime}
+          <>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-dark-400">
+                {filteredEntries.length} result
+                {filteredEntries.length === 1 ? "" : "s"}
+                {searchQuery ? ` for “${searchQuery}”` : ""}
+              </p>
+              {filteredEntries.length > itemsPerPage ? (
+                <p className="text-xs text-dark-500">
+                  Use the pager or jump to a page number to browse faster.
+                </p>
+              ) : null}
+            </div>
+
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.2 }}
+            >
+              <AnimeCardGrid
+                anime={paginatedEntries}
+                onEdit={handleEditAnime}
+                onDelete={handleDeleteAnime}
+                emptyTitle={
+                  searchQuery
+                    ? `No results for “${searchQuery}”`
+                    : "No anime found"
+                }
+                emptyDescription={
+                  searchQuery
+                    ? "Try a different title or clear the search to view the full collection."
+                    : "Try adding your first anime or adjusting your filters."
+                }
+              />
+            </motion.div>
+
+            <PaginationControls
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={filteredEntries.length}
+              pageSize={itemsPerPage}
+              onPageChange={setCurrentPage}
+              itemLabel="anime"
             />
-          </motion.div>
+          </>
         )}
       </main>
 

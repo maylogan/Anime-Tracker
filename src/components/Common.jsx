@@ -38,6 +38,105 @@ export const EmptyState = ({
   );
 };
 
+export const PaginationControls = ({
+  currentPage,
+  totalPages,
+  totalItems,
+  pageSize,
+  onPageChange,
+  itemLabel = "items",
+}) => {
+  const [isEditingPage, setIsEditingPage] = useState(false);
+  const [draftPage, setDraftPage] = useState(String(currentPage));
+
+  useEffect(() => {
+    setDraftPage(String(currentPage));
+  }, [currentPage]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      onPageChange(totalPages);
+    }
+  }, [currentPage, totalPages, onPageChange]);
+
+  if (!totalPages || totalPages <= 1) return null;
+
+  const startItem = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const endItem = Math.min(currentPage * pageSize, totalItems);
+
+  const commitPage = () => {
+    const parsed = Number.parseInt(draftPage, 10);
+    const nextPage = Number.isNaN(parsed)
+      ? currentPage
+      : Math.min(totalPages, Math.max(1, parsed));
+
+    setDraftPage(String(nextPage));
+    setIsEditingPage(false);
+    onPageChange(nextPage);
+  };
+
+  return (
+    <div className="mt-6 flex flex-col gap-3 rounded-2xl border border-dark-700 bg-dark-900/70 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-sm text-dark-300">
+        Showing {startItem}-{endItem} of {totalItems} {itemLabel}
+      </p>
+
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+          disabled={currentPage === 1}
+          className="rounded-lg border border-dark-700 bg-dark-800 px-3 py-2 text-sm font-semibold text-dark-50 transition-colors hover:border-accent-blue hover:text-accent-blue disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Previous
+        </button>
+
+        <div className="flex items-center gap-2 rounded-lg border border-dark-700 bg-dark-800 px-3 py-2 text-sm font-semibold text-dark-300">
+          <span>Page</span>
+          {isEditingPage ? (
+            <input
+              autoFocus
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={draftPage}
+              onChange={(e) => setDraftPage(e.target.value.replace(/\D/g, ""))}
+              onBlur={commitPage}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitPage();
+                if (e.key === "Escape") {
+                  setDraftPage(String(currentPage));
+                  setIsEditingPage(false);
+                }
+              }}
+              aria-label="Jump to page"
+              className="w-14 rounded-md border border-dark-600 bg-dark-900 px-2 py-1 text-center text-dark-50 outline-none focus:border-accent-blue"
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsEditingPage(true)}
+              className="rounded-md px-2 py-1 text-dark-50 transition-colors hover:text-accent-blue"
+              aria-label={`Jump to page ${currentPage}`}
+            >
+              {currentPage}
+            </button>
+          )}
+          <span>of {totalPages}</span>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+          disabled={currentPage === totalPages}
+          className="rounded-lg border border-dark-700 bg-dark-800 px-3 py-2 text-sm font-semibold text-dark-50 transition-colors hover:border-accent-blue hover:text-accent-blue disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  );
+};
+
 export const RatingStars = ({
   rating,
   onChange,
