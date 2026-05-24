@@ -6,6 +6,25 @@ const SUPABASE_URL =
   process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+const extractAvatarStoragePath = (avatarUrl, bucket = "profiles") => {
+  if (!avatarUrl || typeof avatarUrl !== "string") return null;
+
+  try {
+    const parsedUrl = new URL(avatarUrl);
+    const bucketMarker = `/${bucket}/`;
+    const markerIndex = parsedUrl.pathname.indexOf(bucketMarker);
+    if (markerIndex === -1) return null;
+
+    const rawPath = parsedUrl.pathname.slice(markerIndex + bucketMarker.length);
+    const normalized = decodeURIComponent(rawPath).replace(/^\/+/, "").trim();
+    return normalized || null;
+  } catch {
+    const fallbackMatch = avatarUrl.match(new RegExp(`${bucket}/([^?]+)`));
+    if (!fallbackMatch?.[1]) return null;
+    return decodeURIComponent(fallbackMatch[1]).replace(/^\/+/, "").trim();
+  }
+};
+
 export default async function handler(req) {
   try {
     if (req.method !== "POST") {
@@ -56,6 +75,16 @@ export default async function handler(req) {
       },
     );
 
+    const { data: existingProfile } = await supabaseAdmin
+      .from("user_profiles")
+      .select("avatar_url")
+      .eq("id", userId)
+      .maybeSingle();
+
+    const previousAvatarPath = extractAvatarStoragePath(
+      existingProfile?.avatar_url,
+    );
+
     const fileName = `${userId}/${Date.now()}_${avatar.name || "avatar"}`;
 
     // upload
@@ -81,6 +110,17 @@ export default async function handler(req) {
       .from("user_profiles")
       .update({ avatar_url: signed?.signedURL || null })
       .eq("id", userId);
+
+    // Best-effort cleanup: remove old object after profile points to the new avatar.
+    if (previousAvatarPath && previousAvatarPath !== fileName) {
+      const { error: removeError } = await supabaseAdmin.storage
+        .from("profiles")
+        .remove([previousAvatarPath]);
+
+      if (removeError) {
+        console.warn("Previous avatar cleanup failed:", removeError.message);
+      }
+    }
 
     return new Response(
       JSON.stringify({ publicUrl: signed?.signedURL || null }),

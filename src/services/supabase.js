@@ -119,6 +119,10 @@ const isUuid = (value) =>
     value.trim(),
   );
 
+const AVATAR_MAX_DIMENSION = 512;
+const AVATAR_MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
+const AVATAR_MAX_INPUT_BYTES = 10 * 1024 * 1024;
+
 const normalizeFallbackUsername = (value, userId) => {
   const cleaned = (value || "")
     .trim()
@@ -239,7 +243,6 @@ export const checkUsernameAvailable = async (username) => {
       .maybeSingle();
 
     if (error && error.code !== "PGRST116") throw error;
-    console.log(`Username "${username}" check - exists:`, !!data);
     return !data; // Returns true if username is available
   } catch (err) {
     console.error("Error checking username:", err);
@@ -250,50 +253,134 @@ export const checkUsernameAvailable = async (username) => {
   }
 };
 
+const extractAvatarStoragePath = (avatarUrl, bucket = "profiles") => {
+  if (!avatarUrl || typeof avatarUrl !== "string") return null;
+
+  try {
+    const parsedUrl = new URL(avatarUrl);
+    const bucketMarker = `/${bucket}/`;
+    const markerIndex = parsedUrl.pathname.indexOf(bucketMarker);
+    if (markerIndex === -1) return null;
+
+    const rawPath = parsedUrl.pathname.slice(markerIndex + bucketMarker.length);
+    const normalized = decodeURIComponent(rawPath).replace(/^\/+/, "").trim();
+    return normalized || null;
+  } catch {
+    const fallbackMatch = avatarUrl.match(new RegExp(`${bucket}/([^?]+)`));
+    if (!fallbackMatch?.[1]) return null;
+    return decodeURIComponent(fallbackMatch[1]).replace(/^\/+/, "").trim();
+  }
+};
+
+const optimizeAvatarFile = async (file) => {
+  if (typeof window === "undefined") return file;
+
+  const objectUrl = URL.createObjectURL(file);
+
+  try {
+    const image = await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("Failed to read image"));
+      img.src = objectUrl;
+    });
+
+    const width = image.width || 0;
+    const height = image.height || 0;
+
+    if (!width || !height) {
+      throw new Error("Invalid image dimensions");
+    }
+
+    if (width > 4000 || height > 4000) {
+      throw new Error("Image dimensions too large (max 4000px)");
+    }
+
+    const scale = Math.min(1, AVATAR_MAX_DIMENSION / Math.max(width, height));
+    const targetWidth = Math.max(1, Math.round(width * scale));
+    const targetHeight = Math.max(1, Math.round(height * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+
+    ctx.drawImage(image, 0, 0, targetWidth, targetHeight);
+
+    const blob = await new Promise((resolve, reject) => {
+      canvas.toBlob(
+        (result) => {
+          if (!result) {
+            reject(new Error("Failed to compress image"));
+            return;
+          }
+          resolve(result);
+        },
+        "image/webp",
+        0.82,
+      );
+    });
+
+    const originalBaseName = (file.name || "avatar")
+      .replace(/\.[^.]+$/, "")
+      .replace(/[^a-zA-Z0-9_-]/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^[-_]+|[-_]+$/g, "");
+
+    const optimizedFile = new File(
+      [blob],
+      `${originalBaseName || "avatar"}.webp`,
+      {
+        type: "image/webp",
+        lastModified: Date.now(),
+      },
+    );
+
+    // Keep original if optimization did not reduce size and no resize happened.
+    if (scale === 1 && optimizedFile.size >= file.size) {
+      return file;
+    }
+
+    return optimizedFile;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+};
+
 export const uploadAvatar = async (userId, file) => {
   try {
     // Client-side validation: restrict types and size
     const allowedTypes = ["image/png", "image/jpeg", "image/webp"];
-    const maxBytes = 2 * 1024 * 1024; // 2MB
 
     if (!file || !file.type) throw new Error("No file provided");
     if (!allowedTypes.includes(file.type)) {
       throw new Error("Invalid file type. Allowed: PNG, JPEG, WEBP");
     }
-    if (file.size > maxBytes) {
-      throw new Error("File too large. Max size is 2MB");
+    if (file.size > AVATAR_MAX_INPUT_BYTES) {
+      throw new Error("File too large. Max input size is 10MB");
     }
 
-    // Optional: check image dimensions in browser (best-effort)
-    const checkImageDims = () =>
-      new Promise((resolve, reject) => {
-        try {
-          const img = new Image();
-          img.onload = () => {
-            // Prevent extremely large images (dimensions > 4000px)
-            if (img.width > 4000 || img.height > 4000) {
-              reject(new Error("Image dimensions too large (max 4000px)"));
-              return;
-            }
-            resolve();
-          };
-          img.onerror = () => reject(new Error("Failed to read image"));
-          img.src = URL.createObjectURL(file);
-        } catch (err) {
-          // If anything goes wrong, don't block upload — server will validate
-          resolve();
-        }
-      });
+    let uploadFile = file;
+    try {
+      uploadFile = await optimizeAvatarFile(file);
+    } catch (optimizeError) {
+      console.warn(
+        "Avatar optimization failed, uploading original file:",
+        optimizeError?.message || optimizeError,
+      );
+    }
 
-    if (typeof window !== "undefined") {
-      await checkImageDims();
+    if (uploadFile.size > AVATAR_MAX_UPLOAD_BYTES) {
+      throw new Error("Image is still too large after compression (max 2MB)");
     }
 
     // If a secure upload endpoint is configured (e.g. Vercel Edge Function), use it
     const uploadFn = import.meta.env.VITE_UPLOAD_FUNCTION_URL;
     if (uploadFn) {
       const fd = new FormData();
-      fd.append("avatar", file);
+      fd.append("avatar", uploadFile);
       fd.append("userId", userId);
 
       const res = await fetch(uploadFn, {
@@ -317,13 +404,18 @@ export const uploadAvatar = async (userId, file) => {
 
     // Fallback: directly upload using anon key (not recommended for production)
     const fileName = `${userId}/${Date.now()}_${file.name}`;
+    const existingProfile = await getUserProfile(userId);
+    const previousAvatarPath = extractAvatarStoragePath(
+      existingProfile?.avatar_url,
+    );
+
     console.warn(
       "No upload endpoint configured (VITE_UPLOAD_FUNCTION_URL). Falling back to direct upload with anon key. Consider deploying a server-side upload function and set VITE_UPLOAD_FUNCTION_URL.",
     );
 
     const { error: uploadError } = await supabase.storage
       .from("profiles")
-      .upload(fileName, file, { upsert: true });
+      .upload(fileName, uploadFile, { upsert: true });
 
     if (uploadError) {
       console.error("Storage upload error:", uploadError);
@@ -332,6 +424,18 @@ export const uploadAvatar = async (userId, file) => {
 
     const { data } = supabase.storage.from("profiles").getPublicUrl(fileName);
     await updateUserProfile(userId, { avatar_url: data.publicUrl });
+
+    // Best-effort cleanup: keep the latest avatar and remove the previous object.
+    if (previousAvatarPath && previousAvatarPath !== fileName) {
+      const { error: removeError } = await supabase.storage
+        .from("profiles")
+        .remove([previousAvatarPath]);
+
+      if (removeError) {
+        console.warn("Previous avatar cleanup failed:", removeError.message);
+      }
+    }
+
     return data.publicUrl;
   } catch (err) {
     console.error("Avatar upload error:", err.message || err);
@@ -341,14 +445,9 @@ export const uploadAvatar = async (userId, file) => {
 
 export const searchUsers = async (query) => {
   try {
-    console.log("Starting user search for:", query);
-
-    // First, try a simple query to see if we get ANY data
     const { data, error } = await supabase
       .from("user_profiles")
       .select("id, username, avatar_url, created_at");
-
-    console.log("All users in DB:", data?.length || 0, "Error:", error);
 
     // Now do the filtered search
     const { data: filtered, error: filterError } = await supabase
@@ -361,11 +460,6 @@ export const searchUsers = async (query) => {
       console.error("Filter error:", filterError);
       throw filterError;
     }
-
-    console.log(
-      `Search for "${query}" - Found ${(filtered || []).length} users:`,
-      filtered?.slice(0, 3),
-    );
     return filtered || [];
   } catch (err) {
     console.error("Error searching users:", err);
