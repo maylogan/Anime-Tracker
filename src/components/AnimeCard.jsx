@@ -11,11 +11,11 @@ export const AnimeCard = ({ anime, onEdit, onDelete, densityOverride }) => {
   const canManageAnime =
     typeof onEdit === "function" && typeof onDelete === "function";
   const statusColors = {
-    Watching: "cyan",
-    Completed: "pink",
+    Watching: "green",
+    Completed: "orange",
     Planned: "purple",
     "Plan to Watch": "purple",
-    "On Hold": "cyan",
+    "On Hold": "amber",
     Dropped: "pink",
   };
   const normalizeStatus = (status) => {

@@ -174,6 +174,9 @@ export const Badge = ({ text, color = "purple", icon }) => {
     purple: "badge-purple",
     pink: "badge-pink",
     cyan: "badge-cyan",
+    green: "badge-green",
+    orange: "badge-orange",
+    amber: "badge-amber",
   }[color];
 
   return (

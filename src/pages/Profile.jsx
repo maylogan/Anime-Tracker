@@ -336,6 +336,9 @@ export const Profile = () => {
   const profileRatingLabel = profile?.username
     ? `${profile.username}'s Rating`
     : "Your Rating";
+  const profileSortRatingLabel = profile?.username
+    ? `${profile.username}'s rating`
+    : "Your rating";
 
   const checkUsername = async (username) => {
     if (!username.trim()) {
@@ -782,6 +785,7 @@ export const Profile = () => {
                     showCardDensity={false}
                     searchPlaceholder="Search anime in this collection by title"
                     ratingLabel={profileRatingLabel}
+                    sortRatingLabel={profileSortRatingLabel}
                     filters={{
                       searchQuery: profileQuery,
                       selectedStatus: profileStatusFilter,

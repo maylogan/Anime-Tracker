@@ -161,6 +161,7 @@ export const FilterBar = ({
   showCardDensity = true,
   searchPlaceholder = "Search your anime list...",
   ratingLabel = "Your Rating",
+  sortRatingLabel = "Your rating",
   filters,
 }) => {
   const storeFilters = useAnimeStore();
@@ -207,6 +208,15 @@ export const FilterBar = ({
   const [draftSortBy, setDraftSortBy] = useState(sortBy);
   const [isCategoriesOpen, setIsCategoriesOpen] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState(null);
+  const resolvedSortOptions = useMemo(
+    () =>
+      sortOptions.map((option) =>
+        option.value === "userRating"
+          ? { ...option, label: sortRatingLabel }
+          : option,
+      ),
+    [sortRatingLabel],
+  );
 
   useEffect(() => {
     setDraftSearchQuery(searchQuery);
@@ -335,7 +345,7 @@ export const FilterBar = ({
               whileHover={{ scale: 1.01 }}
               whileTap={{ scale: 0.98 }}
               onClick={onAddAnime}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-accent-blue/30 bg-accent-blue/10 px-6 py-3 text-sm font-semibold text-accent-blue transition-all duration-200 hover:border-accent-blue hover:bg-accent-blue/15 w-72"
+              className="inline-flex w-full max-w-72 items-center justify-center gap-2 rounded-xl border border-accent-blue/30 bg-accent-blue/10 px-6 py-3 text-sm font-semibold text-accent-blue transition-all duration-200 hover:border-accent-blue hover:bg-accent-blue/15"
             >
               <Plus size={18} />
               Add Anime
@@ -478,10 +488,11 @@ export const FilterBar = ({
                 <DropdownMenu
                   label="Sort"
                   valueLabel={
-                    sortOptions.find((option) => option.value === draftSortBy)
-                      ?.label || "Latest entries"
+                    resolvedSortOptions.find(
+                      (option) => option.value === draftSortBy,
+                    )?.label || "Latest entries"
                   }
-                  options={sortOptions}
+                  options={resolvedSortOptions}
                   activeKey={activeDropdown}
                   setActiveKey={setActiveDropdown}
                   selectedValue={draftSortBy}
