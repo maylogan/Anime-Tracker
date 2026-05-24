@@ -30,6 +30,7 @@ import {
   isProfileBookmarked,
   toggleProfileBookmark,
 } from "../services/profileBookmarks";
+import { sortAnimeEntries } from "../store/store";
 
 export const Profile = () => {
   const navigate = useNavigate();
@@ -207,6 +208,7 @@ export const Profile = () => {
   const [profileYearFilter, setProfileYearFilter] = useState("All");
   const [profileMinRating, setProfileMinRating] = useState(0);
   const [profileMinAudienceRating, setProfileMinAudienceRating] = useState(0);
+  const [profileSortBy, setProfileSortBy] = useState("latest");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
@@ -297,12 +299,17 @@ export const Profile = () => {
     profileMinAudienceRating,
   ]);
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredProfileAnime.length / itemsPerPage),
+  const sortedProfileAnime = useMemo(
+    () => sortAnimeEntries(filteredProfileAnime, profileSortBy),
+    [filteredProfileAnime, profileSortBy],
   );
 
-  const paginatedProfileAnime = filteredProfileAnime.slice(
+  const totalPages = Math.max(
+    1,
+    Math.ceil(sortedProfileAnime.length / itemsPerPage),
+  );
+
+  const paginatedProfileAnime = sortedProfileAnime.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage,
   );
@@ -319,6 +326,7 @@ export const Profile = () => {
     profileYearFilter,
     profileMinRating,
     profileMinAudienceRating,
+    profileSortBy,
   ]);
 
   useEffect(() => {
@@ -782,6 +790,7 @@ export const Profile = () => {
                       selectedYear: profileYearFilter,
                       minRating: profileMinRating,
                       minAudienceRating: profileMinAudienceRating,
+                      sortBy: profileSortBy,
                       setSearchQuery: setProfileQuery,
                       setSelectedStatus: setProfileStatusFilter,
                       setSelectedCategory: setProfileCategoryFilter,
@@ -789,6 +798,7 @@ export const Profile = () => {
                       setSelectedYear: setProfileYearFilter,
                       setMinRating: setProfileMinRating,
                       setMinAudienceRating: setProfileMinAudienceRating,
+                      setSortBy: setProfileSortBy,
                     }}
                   />
 

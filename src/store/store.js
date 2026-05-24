@@ -1,6 +1,76 @@
 import { create } from "zustand";
 import { subscribeToAnimeEntries } from "../services/supabase";
 
+const toTimestamp = (value) => {
+  if (!value) return Number.NEGATIVE_INFINITY;
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? Number.NEGATIVE_INFINITY : time;
+};
+
+const toNullableTimestamp = (value) => {
+  if (!value) return null;
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? null : time;
+};
+
+const getAudienceFloat = (value) => {
+  if (value === null || value === undefined) return null;
+  const numericValue = Number(value);
+  if (Number.isNaN(numericValue)) return null;
+  return numericValue > 10 ? numericValue / 10 : numericValue;
+};
+
+export const sortAnimeEntries = (entries = [], sortBy = "latest") => {
+  const items = [...entries];
+
+  const byLatest = (a, b) =>
+    toTimestamp(b.created_at) - toTimestamp(a.created_at);
+  const byReleaseDate = (a, b) => {
+    const aTime = toNullableTimestamp(a.release_date);
+    const bTime = toNullableTimestamp(b.release_date);
+
+    if (aTime === null && bTime === null) {
+      return byLatest(a, b);
+    }
+
+    if (aTime === null) return 1;
+    if (bTime === null) return -1;
+
+    if (aTime !== bTime) return bTime - aTime;
+    return byLatest(a, b);
+  };
+  const byAudienceRating = (a, b) => {
+    const aValue = getAudienceFloat(a.audience_rating);
+    const bValue = getAudienceFloat(b.audience_rating);
+    const normalizedA = aValue === null ? Number.NEGATIVE_INFINITY : aValue;
+    const normalizedB = bValue === null ? Number.NEGATIVE_INFINITY : bValue;
+    return normalizedB - normalizedA;
+  };
+  const byUserRating = (a, b) => (b.rating || 0) - (a.rating || 0);
+  const byTitleAsc = (a, b) =>
+    (a.title || "").localeCompare(b.title || "", undefined, {
+      sensitivity: "base",
+      numeric: true,
+    });
+  const byTitleDesc = (a, b) => byTitleAsc(b, a);
+
+  switch (sortBy) {
+    case "releaseDate":
+      return items.sort(byReleaseDate);
+    case "audienceRating":
+      return items.sort(byAudienceRating);
+    case "userRating":
+      return items.sort(byUserRating);
+    case "titleAsc":
+      return items.sort(byTitleAsc);
+    case "titleDesc":
+      return items.sort(byTitleDesc);
+    case "latest":
+    default:
+      return items.sort(byLatest);
+  }
+};
+
 export const useAuthStore = create((set) => ({
   user: null,
   isLoading: true,
@@ -21,6 +91,7 @@ export const useAnimeStore = create((set, get) => ({
   selectedYear: "All",
   minRating: 0,
   minAudienceRating: 0,
+  sortBy: "latest",
   cardDensity: "superCondensed",
 
   setEntries: (entries) => set({ entries }),
@@ -33,6 +104,10 @@ export const useAnimeStore = create((set, get) => ({
   setSelectedYear: (year) => set({ selectedYear: year }),
   setMinRating: (rating) => set({ minRating: rating }),
   setMinAudienceRating: (rating) => set({ minAudienceRating: rating }),
+  setSortBy: (sortBy) => {
+    set({ sortBy });
+    get().filterEntries();
+  },
   setCardDensity: (cardDensity) => set({ cardDensity }),
 
   addEntry: (entry) => {
@@ -62,6 +137,7 @@ export const useAnimeStore = create((set, get) => ({
       selectedYear,
       minRating,
       minAudienceRating,
+      sortBy,
     } = get();
 
     const effectiveSearchQuery =
@@ -123,7 +199,9 @@ export const useAnimeStore = create((set, get) => ({
       );
     });
 
-    set({ filteredEntries: filtered });
+    set({
+      filteredEntries: sortAnimeEntries(filtered, overrides.sortBy ?? sortBy),
+    });
   },
 
   setupRealtimeListener: (userId) => {

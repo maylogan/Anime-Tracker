@@ -50,6 +50,8 @@ export const Dashboard = () => {
     selectedYear,
     minRating,
     minAudienceRating,
+    sortBy,
+    setSortBy,
     setEntries,
     setLoading,
     addEntry,
@@ -214,6 +216,7 @@ export const Dashboard = () => {
     selectedYear,
     minRating,
     minAudienceRating,
+    sortBy,
   ]);
 
   useEffect(() => {
@@ -542,6 +545,10 @@ export const Dashboard = () => {
           allCategories={allCategories}
           allYears={allYears}
           showAddButton={false}
+          filters={{
+            sortBy,
+            setSortBy,
+          }}
         />
 
         {/* Bookmarks and activity moved to /bookmarks page per request */}

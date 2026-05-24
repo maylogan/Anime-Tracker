@@ -27,8 +27,131 @@ const statusOptions = [
   "On Hold",
 ];
 
+const sortOptions = [
+  { label: "Latest entries", value: "latest" },
+  { label: "Release date", value: "releaseDate" },
+  { label: "Audience rating", value: "audienceRating" },
+  { label: "Your rating", value: "userRating" },
+  { label: "A-Z", value: "titleAsc" },
+  { label: "Z-A", value: "titleDesc" },
+];
+
 const normalizeArray = (values) =>
   Array.from(new Set((values || []).filter(Boolean)));
+
+const controlShellClass =
+  "relative overflow-hidden rounded-xl border border-dark-700 bg-dark-900 transition-all duration-200 focus-within:border-accent-blue focus-within:ring-1 focus-within:ring-accent-blue/30";
+
+const controlFieldClass =
+  "w-full appearance-none cursor-pointer rounded-xl bg-transparent px-4 py-3 pr-10 text-sm text-dark-50 focus:outline-none";
+
+const controlChevronClass =
+  "pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-dark-400";
+
+const dropdownPanelClass =
+  "mt-2.5 w-full rounded-xl border border-dark-700 bg-dark-900 p-3 shadow-[0_12px_28px_rgba(0,0,0,0.18)]";
+
+const dropdownOptionClass = (active) =>
+  `flex min-h-14 min-w-0 items-center justify-between gap-3 rounded-lg border px-4 py-3 text-left text-[13px] leading-snug transition-all duration-200 sm:text-sm ${
+    active
+      ? "border-accent-blue bg-accent-blue/10 text-dark-50"
+      : "border-dark-700 bg-dark-800 text-dark-300 hover:border-accent-blue/40 hover:text-dark-50"
+  }`;
+
+const dropdownButtonClass =
+  "flex w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left transition-colors hover:text-accent-blue sm:px-4 sm:py-3";
+
+const DropdownMenu = ({
+  label,
+  valueLabel,
+  options,
+  activeKey,
+  setActiveKey,
+  selectedValue,
+  onSelect,
+  onReset,
+  resetLabel = "Reset",
+}) => {
+  const isOpen = activeKey === label;
+
+  return (
+    <div>
+      <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-accent-blue">
+        {label}
+      </label>
+      <div className={controlShellClass}>
+        <button
+          type="button"
+          onClick={() => setActiveKey(isOpen ? null : label)}
+          className={dropdownButtonClass}
+          aria-expanded={isOpen}
+        >
+          <span className="min-w-0 truncate text-[13px] text-dark-50 sm:text-sm">
+            {valueLabel}
+          </span>
+          <ChevronDown
+            size={16}
+            className={`shrink-0 text-dark-400 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+          />
+        </button>
+      </div>
+
+      <AnimatePresence initial={false}>
+        {isOpen ? (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+          >
+            <div className={dropdownPanelClass}>
+              <div className="grid max-h-72 gap-2 overflow-y-auto">
+                {options.map((option) => {
+                  const active = String(option.value) === String(selectedValue);
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => {
+                        onSelect(option.value);
+                        setActiveKey(null);
+                      }}
+                      className={dropdownOptionClass(active)}
+                    >
+                      <span className="min-w-0 flex-1 truncate pr-3">
+                        {option.label}
+                      </span>
+                      {active ? <Check size={14} /> : null}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="mt-2.5 flex items-center justify-between gap-3 border-t border-dark-700 pt-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onReset?.();
+                    setActiveKey(null);
+                  }}
+                  className="text-[11px] font-semibold text-dark-400 transition-colors hover:text-accent-blue"
+                >
+                  {resetLabel}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveKey(null)}
+                  className="rounded-lg border border-dark-700 px-3 py-2 text-xs font-semibold text-dark-300 transition-colors hover:border-dark-500 hover:text-dark-50"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </div>
+  );
+};
 
 export const FilterBar = ({
   allCategories = [],
@@ -56,6 +179,7 @@ export const FilterBar = ({
     selectedYear = "All",
     minRating = 0,
     minAudienceRating = 0,
+    sortBy = "latest",
     cardDensity = "superCondensed",
     setSearchQuery = storeFilters.setSearchQuery,
     setSelectedStatus = storeFilters.setSelectedStatus,
@@ -64,11 +188,11 @@ export const FilterBar = ({
     setSelectedYear = storeFilters.setSelectedYear,
     setMinRating = storeFilters.setMinRating,
     setMinAudienceRating = storeFilters.setMinAudienceRating,
+    setSortBy = storeFilters.setSortBy,
     setCardDensity = storeFilters.setCardDensity,
   } = resolvedFilters;
 
-  const hasMultiCategoryFilters =
-    !filters || Array.isArray(filters.selectedCategories);
+  const hasMultiCategoryFilters = Array.isArray(selectedCategories);
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
   const [draftSearchQuery, setDraftSearchQuery] = useState(searchQuery);
   const [draftStatus, setDraftStatus] = useState(selectedStatus);
@@ -80,6 +204,9 @@ export const FilterBar = ({
   const [draftMinRating, setDraftMinRating] = useState(minRating);
   const [draftMinAudienceRating, setDraftMinAudienceRating] =
     useState(minAudienceRating);
+  const [draftSortBy, setDraftSortBy] = useState(sortBy);
+  const [isCategoriesOpen, setIsCategoriesOpen] = useState(false);
+  const [activeDropdown, setActiveDropdown] = useState(null);
 
   useEffect(() => {
     setDraftSearchQuery(searchQuery);
@@ -89,6 +216,7 @@ export const FilterBar = ({
     setDraftYear(selectedYear);
     setDraftMinRating(minRating);
     setDraftMinAudienceRating(minAudienceRating);
+    setDraftSortBy(sortBy);
   }, [
     searchQuery,
     selectedStatus,
@@ -97,6 +225,7 @@ export const FilterBar = ({
     selectedYear,
     minRating,
     minAudienceRating,
+    sortBy,
   ]);
 
   useEffect(() => {
@@ -122,7 +251,8 @@ export const FilterBar = ({
     activeCategoryCount +
     (draftYear !== "All" ? 1 : 0) +
     (draftMinRating > 0 ? 1 : 0) +
-    (draftMinAudienceRating > 0 ? 1 : 0);
+    (draftMinAudienceRating > 0 ? 1 : 0) +
+    (draftSortBy !== "latest" ? 1 : 0);
 
   const applyDraftFilters = () => {
     setSearchQuery(draftSearchQuery);
@@ -139,9 +269,10 @@ export const FilterBar = ({
     setSelectedYear(draftYear);
     setMinRating(Number(draftMinRating));
     setMinAudienceRating(Number(draftMinAudienceRating));
+    setSortBy(draftSortBy);
 
     if (typeof filterEntries === "function") {
-      filterEntries();
+      filterEntries({ searchQuery: draftSearchQuery, sortBy: draftSortBy });
     }
 
     setIsFilterPanelOpen(false);
@@ -155,6 +286,9 @@ export const FilterBar = ({
     setDraftYear("All");
     setDraftMinRating(0);
     setDraftMinAudienceRating(0);
+    setDraftSortBy("latest");
+    setIsCategoriesOpen(false);
+    setActiveDropdown(null);
 
     setSearchQuery("");
     setSelectedStatus("All");
@@ -163,9 +297,10 @@ export const FilterBar = ({
     setSelectedYear("All");
     setMinRating(0);
     setMinAudienceRating(0);
+    setSortBy("latest");
 
     if (typeof filterEntries === "function") {
-      filterEntries();
+      filterEntries({ searchQuery: "", sortBy: "latest" });
     }
   };
 
@@ -228,10 +363,10 @@ export const FilterBar = ({
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => setIsFilterPanelOpen((current) => !current)}
-            className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-dark-700 bg-dark-800 px-4 text-sm font-semibold text-dark-50 transition-all duration-200 hover:border-accent-blue/60 hover:text-accent-blue"
+            className="inline-flex h-12 self-end items-center justify-center gap-2 rounded-xl border border-dark-700 bg-dark-800 px-4 text-sm font-semibold text-dark-50 transition-all duration-200 hover:border-accent-blue/60 hover:text-accent-blue"
           >
             <SlidersHorizontal size={16} />
-            Filters
+            Filter / Sort
             <ChevronDown
               size={16}
               className={`transition-transform duration-200 ${isFilterPanelOpen ? "rotate-180" : ""}`}
@@ -256,11 +391,12 @@ export const FilterBar = ({
             >
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-blue">
-                    Filters
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-accent-blue">
+                    Filter / Sort
                   </p>
-                  <p className="mt-1 text-sm text-dark-400">
-                    Narrow the list without losing the current search draft.
+                  <p className="mt-1 text-[13px] leading-snug text-dark-400 sm:text-sm">
+                    Narrow and reorder the list without losing the current
+                    search draft.
                   </p>
                 </div>
                 <button
@@ -273,140 +409,202 @@ export const FilterBar = ({
                 </button>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                <div>
-                  <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-accent-blue">
-                    Status
-                  </label>
-                  <select
-                    value={draftStatus}
-                    onChange={(e) => setDraftStatus(e.target.value)}
-                    className="w-full cursor-pointer rounded-xl border border-dark-700 bg-dark-900 px-3 py-2.5 pr-10 appearance-none text-sm text-dark-50 transition-all duration-200 focus:border-accent-blue focus:outline-none"
-                  >
-                    {statusOptions.map((option) => (
-                      <option
-                        key={option}
-                        value={option === "All Statuses" ? "All" : option}
-                      >
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                <DropdownMenu
+                  label="Status"
+                  valueLabel={draftStatus}
+                  options={statusOptions.map((option) => ({
+                    label: option,
+                    value: option === "All Statuses" ? "All" : option,
+                  }))}
+                  activeKey={activeDropdown}
+                  setActiveKey={setActiveDropdown}
+                  selectedValue={draftStatus}
+                  onSelect={setDraftStatus}
+                  onReset={() => setDraftStatus("All")}
+                  resetLabel="All Statuses"
+                />
 
-                <div>
-                  <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-accent-blue">
-                    Release Year
-                  </label>
-                  <select
-                    value={draftYear}
-                    onChange={(e) => setDraftYear(e.target.value)}
-                    className="w-full cursor-pointer rounded-xl border border-dark-700 bg-dark-900 px-3 py-2.5 pr-10 appearance-none text-sm text-dark-50 transition-all duration-200 focus:border-accent-blue focus:outline-none"
-                  >
-                    <option value="All">All Years</option>
-                    {allYearsSorted.map((year) => (
-                      <option key={year} value={year.toString()}>
-                        {year}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <DropdownMenu
+                  label="Release Year"
+                  valueLabel={draftYear}
+                  options={[
+                    { label: "All Years", value: "All" },
+                    ...allYearsSorted.map((year) => ({
+                      label: String(year),
+                      value: String(year),
+                    })),
+                  ]}
+                  activeKey={activeDropdown}
+                  setActiveKey={setActiveDropdown}
+                  selectedValue={draftYear}
+                  onSelect={setDraftYear}
+                  onReset={() => setDraftYear("All")}
+                  resetLabel="All Years"
+                />
 
-                <div>
-                  <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-accent-blue">
-                    {ratingLabel}
-                  </label>
-                  <select
-                    value={draftMinRating}
-                    onChange={(e) => setDraftMinRating(Number(e.target.value))}
-                    className="w-full cursor-pointer rounded-xl border border-dark-700 bg-dark-900 px-3 py-2.5 pr-10 appearance-none text-sm text-dark-50 transition-all duration-200 focus:border-accent-blue focus:outline-none"
-                  >
-                    {ratingOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <DropdownMenu
+                  label={ratingLabel}
+                  valueLabel={
+                    ratingOptions.find(
+                      (option) => option.value === draftMinRating,
+                    )?.label || "Any Rating"
+                  }
+                  options={ratingOptions}
+                  activeKey={activeDropdown}
+                  setActiveKey={setActiveDropdown}
+                  selectedValue={draftMinRating}
+                  onSelect={(value) => setDraftMinRating(Number(value))}
+                  onReset={() => setDraftMinRating(0)}
+                  resetLabel="Any Rating"
+                />
 
-                <div>
-                  <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-accent-blue">
-                    Audience Rating
-                  </label>
-                  <select
-                    value={draftMinAudienceRating}
-                    onChange={(e) =>
-                      setDraftMinAudienceRating(Number(e.target.value))
+                <DropdownMenu
+                  label="Audience Rating"
+                  valueLabel={
+                    ratingOptions.find(
+                      (option) => option.value === draftMinAudienceRating,
+                    )?.label || "Any Rating"
+                  }
+                  options={ratingOptions}
+                  activeKey={activeDropdown}
+                  setActiveKey={setActiveDropdown}
+                  selectedValue={draftMinAudienceRating}
+                  onSelect={(value) => setDraftMinAudienceRating(Number(value))}
+                  onReset={() => setDraftMinAudienceRating(0)}
+                  resetLabel="Any Rating"
+                />
+
+                <DropdownMenu
+                  label="Sort"
+                  valueLabel={
+                    sortOptions.find((option) => option.value === draftSortBy)
+                      ?.label || "Latest entries"
+                  }
+                  options={sortOptions}
+                  activeKey={activeDropdown}
+                  setActiveKey={setActiveDropdown}
+                  selectedValue={draftSortBy}
+                  onSelect={(value) => {
+                    setDraftSortBy(value);
+                    setSortBy(value);
+                    if (typeof filterEntries === "function") {
+                      filterEntries({ sortBy: value });
                     }
-                    className="w-full cursor-pointer rounded-xl border border-dark-700 bg-dark-900 px-3 py-2.5 pr-10 appearance-none text-sm text-dark-50 transition-all duration-200 focus:border-accent-blue focus:outline-none"
-                  >
-                    {ratingOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                  }}
+                  onReset={() => {
+                    setDraftSortBy("latest");
+                    setSortBy("latest");
+                  }}
+                  resetLabel="Latest entries"
+                />
 
-                <div className="md:col-span-2 xl:col-span-3">
+                <div className="md:col-span-2 xl:col-span-5">
                   <div className="mb-2 flex items-center justify-between gap-2">
-                    <label className="text-xs font-semibold uppercase tracking-wide text-accent-blue">
+                    <label className="block text-[11px] font-semibold uppercase tracking-wide text-accent-blue">
                       Categories / Genres
                     </label>
+                    {activeCategoryCount > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          hasMultiCategoryFilters
+                            ? setDraftCategories([])
+                            : setDraftCategory("All");
+                        }}
+                        className="text-[11px] font-semibold text-dark-400 transition-colors hover:text-accent-blue"
+                      >
+                        Clear categories
+                      </button>
+                    ) : null}
+                  </div>
+
+                  <div className={controlShellClass}>
                     <button
                       type="button"
-                      onClick={() =>
-                        hasMultiCategoryFilters
-                          ? setDraftCategories([])
-                          : setDraftCategory("All")
-                      }
-                      className="text-xs font-semibold text-dark-400 transition-colors hover:text-accent-blue"
+                      onClick={() => setIsCategoriesOpen((current) => !current)}
+                      className={dropdownButtonClass}
+                      aria-expanded={isCategoriesOpen}
                     >
-                      Clear categories
+                      <span className="min-w-0 truncate text-[13px] text-dark-50 sm:text-sm">
+                        {activeCategoryCount > 0
+                          ? hasMultiCategoryFilters
+                            ? `${activeCategoryCount} selected`
+                            : draftCategory
+                          : "Choose one or more genres"}
+                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {activeCategoryCount > 0 ? (
+                          <span className="rounded-full bg-accent-blue px-2 py-0.5 text-[10px] font-bold leading-none text-white">
+                            {activeCategoryCount}
+                          </span>
+                        ) : null}
+                        <ChevronDown
+                          size={16}
+                          className={`text-dark-400 transition-transform duration-200 ${isCategoriesOpen ? "rotate-180" : ""}`}
+                        />
+                      </div>
                     </button>
                   </div>
 
-                  {hasMultiCategoryFilters ? (
-                    <div className="grid max-h-60 gap-2 overflow-y-auto rounded-xl border border-dark-700 bg-dark-900 p-3 sm:grid-cols-2 lg:grid-cols-3">
-                      {allCategories.length > 0 ? (
-                        allCategories.map((category) => {
-                          const active = draftCategories.includes(category);
-                          return (
+                  <AnimatePresence initial={false}>
+                    {isCategoriesOpen ? (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="overflow-hidden"
+                      >
+                        <div className={dropdownPanelClass}>
+                          <div className="grid max-h-72 gap-2 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">
+                            {allCategories.length > 0 ? (
+                              allCategories.map((category) => {
+                                const active =
+                                  draftCategories.includes(category);
+                                return (
+                                  <button
+                                    key={category}
+                                    type="button"
+                                    onClick={() => toggleCategory(category)}
+                                    className={dropdownOptionClass(active)}
+                                  >
+                                    <span className="min-w-0 flex-1 truncate pr-3">
+                                      {category}
+                                    </span>
+                                    {active ? <Check size={14} /> : null}
+                                  </button>
+                                );
+                              })
+                            ) : (
+                              <p className="text-sm text-dark-400">
+                                No categories found.
+                              </p>
+                            )}
+                          </div>
+                          <div className="mt-2.5 flex items-center justify-between gap-3 border-t border-dark-700 pt-2.5">
                             <button
-                              key={category}
                               type="button"
-                              onClick={() => toggleCategory(category)}
-                              className={`flex items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition-all duration-200 ${
-                                active
-                                  ? "border-accent-blue bg-accent-blue/10 text-dark-50"
-                                  : "border-dark-700 bg-dark-800 text-dark-300 hover:border-accent-blue/40 hover:text-dark-50"
-                              }`}
+                              onClick={() => {
+                                hasMultiCategoryFilters
+                                  ? setDraftCategories([])
+                                  : setDraftCategory("All");
+                              }}
+                              className="text-[11px] font-semibold text-dark-400 transition-colors hover:text-accent-blue"
                             >
-                              <span className="pr-3">{category}</span>
-                              {active ? <Check size={14} /> : null}
+                              Reset
                             </button>
-                          );
-                        })
-                      ) : (
-                        <p className="text-sm text-dark-400">
-                          No categories found.
-                        </p>
-                      )}
-                    </div>
-                  ) : (
-                    <select
-                      value={draftCategory}
-                      onChange={(e) => setDraftCategory(e.target.value)}
-                      className="w-full cursor-pointer rounded-xl border border-dark-700 bg-dark-900 px-3 py-2.5 pr-10 appearance-none text-sm text-dark-50 transition-all duration-200 focus:border-accent-blue focus:outline-none"
-                    >
-                      <option value="All">All Categories</option>
-                      {allCategories.map((category) => (
-                        <option key={category} value={category}>
-                          {category}
-                        </option>
-                      ))}
-                    </select>
-                  )}
+                            <button
+                              type="button"
+                              onClick={() => setIsCategoriesOpen(false)}
+                              className="rounded-lg border border-dark-700 px-3 py-2 text-xs font-semibold text-dark-300 transition-colors hover:border-dark-500 hover:text-dark-50"
+                            >
+                              Done
+                            </button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    ) : null}
+                  </AnimatePresence>
                 </div>
               </div>
 
