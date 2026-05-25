@@ -33,6 +33,7 @@ import {
   LoadingSkeleton,
   EmptyState,
   PaginationControls,
+  WarningDialog,
 } from "../components/Common";
 import { UserSearch } from "../components/UserSearch";
 
@@ -73,10 +74,42 @@ export const Dashboard = () => {
   const [profile, setProfile] = useState(null);
   const [followedPages, setFollowedPages] = useState([]);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const [deleteConfirmIds, setDeleteConfirmIds] = useState([]);
+  const [warningDialog, setWarningDialog] = useState({
+    isOpen: false,
+    title: "Warning",
+    message: "",
+    items: [],
+  });
+  const [isBulkAddModalOpen, setIsBulkAddModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [expandedStatIndex, setExpandedStatIndex] = useState(null);
   const itemsPerPage = 20;
+
+  const normalizeEntryTitle = (value) =>
+    String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, " ");
+
+  const hasTitleDuplicate = (title, ignoreEntryId = null) => {
+    const normalizedTitle = normalizeEntryTitle(title);
+    if (!normalizedTitle) return false;
+
+    return entries.some((entry) => {
+      if (ignoreEntryId !== null && entry.id === ignoreEntryId) return false;
+      return normalizeEntryTitle(entry.title) === normalizedTitle;
+    });
+  };
+
+  const openWarningDialog = ({ title = "Warning", message, items = [] }) => {
+    setWarningDialog({
+      isOpen: true,
+      title,
+      message,
+      items,
+    });
+  };
 
   const totalPages = Math.max(
     1,
@@ -224,6 +257,16 @@ export const Dashboard = () => {
   }, [totalPages]);
 
   const handleAddAnime = async (formData) => {
+    if (hasTitleDuplicate(formData.title)) {
+      closeAddModal();
+      openWarningDialog({
+        title: "Duplicate",
+        message: "That anime is already in your list.",
+        items: [formData.title || "Unknown"],
+      });
+      return;
+    }
+
     try {
       console.log("Adding anime with data:", formData);
       const newEntry = await addAnimeEntry({
@@ -236,11 +279,102 @@ export const Dashboard = () => {
       closeAddModal();
     } catch (err) {
       console.error("Error adding anime:", err);
-      alert("Failed to add anime: " + (err.message || err));
+      openWarningDialog({
+        message: "Failed to add anime: " + (err.message || err),
+      });
+    }
+  };
+
+  const handleBulkAddAnime = async (animeEntries) => {
+    if (!Array.isArray(animeEntries) || animeEntries.length === 0) {
+      return;
+    }
+
+    const existingTitles = new Set(
+      entries.map((entry) => normalizeEntryTitle(entry.title)).filter(Boolean),
+    );
+    const seenIncomingTitles = new Set();
+    const uniqueEntries = [];
+    const skippedExisting = [];
+    const skippedIncomingDuplicates = [];
+
+    for (const entry of animeEntries) {
+      const normalizedTitle = normalizeEntryTitle(entry?.title);
+      if (!normalizedTitle) continue;
+
+      if (existingTitles.has(normalizedTitle)) {
+        skippedExisting.push(entry.title || "Unknown");
+        continue;
+      }
+
+      if (seenIncomingTitles.has(normalizedTitle)) {
+        skippedIncomingDuplicates.push(entry.title || "Unknown");
+        continue;
+      }
+
+      seenIncomingTitles.add(normalizedTitle);
+      uniqueEntries.push(entry);
+    }
+
+    if (uniqueEntries.length === 0) {
+      setIsBulkAddModalOpen(false);
+      openWarningDialog({
+        title: "Duplicate",
+        message:
+          "No new anime to add. The selected titles are already in your list.",
+        items: Array.from(new Set(skippedExisting)).sort((a, b) =>
+          a.localeCompare(b),
+        ),
+      });
+      return;
+    }
+
+    try {
+      for (let index = 0; index < uniqueEntries.length; index += 1) {
+        const entry = uniqueEntries[index];
+        const newEntry = await addAnimeEntry({
+          user_id: user.id,
+          anime_id: entry.anime_id || Date.now() + index,
+          ...entry,
+        });
+        addEntry(newEntry);
+      }
+
+      setIsBulkAddModalOpen(false);
+
+      if (skippedExisting.length > 0 || skippedIncomingDuplicates.length > 0) {
+        const skippedCount =
+          skippedExisting.length + skippedIncomingDuplicates.length;
+        const uniqueSkippedTitles = Array.from(
+          new Set([...skippedExisting, ...skippedIncomingDuplicates]),
+        ).sort((a, b) => a.localeCompare(b));
+
+        openWarningDialog({
+          title: "Duplicate",
+          message: `Added ${uniqueEntries.length} anime. Skipped ${skippedCount} duplicate${skippedCount === 1 ? "" : "s"}.`,
+          items: uniqueSkippedTitles,
+        });
+      }
+    } catch (err) {
+      console.error("Error bulk adding anime:", err);
+      openWarningDialog({
+        message: "Failed to add anime: " + (err.message || err),
+      });
     }
   };
 
   const handleUpdateAnime = async (formData) => {
+    if (hasTitleDuplicate(formData.title, editingEntryId)) {
+      closeEditModal();
+      setEditingData(null);
+      openWarningDialog({
+        title: "Duplicate",
+        message: "That anime is already in your list.",
+        items: [formData.title || "Unknown"],
+      });
+      return;
+    }
+
     try {
       const updated = await updateAnimeEntry(editingEntryId, formData);
       updateEntry(editingEntryId, formData);
@@ -252,21 +386,21 @@ export const Dashboard = () => {
   };
 
   const handleDeleteAnime = (id) => {
-    setDeleteConfirmId(id);
+    setDeleteConfirmIds([id]);
     setIsDeleteConfirmOpen(true);
   };
 
   const confirmDelete = async () => {
-    if (deleteConfirmId) {
+    if (deleteConfirmIds.length > 0) {
       try {
-        await deleteAnimeEntry(deleteConfirmId);
-        deleteEntry(deleteConfirmId);
+        await Promise.all(deleteConfirmIds.map((id) => deleteAnimeEntry(id)));
+        deleteConfirmIds.forEach((id) => deleteEntry(id));
       } catch (err) {
         console.error("Error deleting anime:", err);
       }
     }
     setIsDeleteConfirmOpen(false);
-    setDeleteConfirmId(null);
+    setDeleteConfirmIds([]);
   };
 
   const handleEditAnime = (anime) => {
@@ -528,7 +662,7 @@ export const Dashboard = () => {
         {/* Add button moved into FilterBar to align widths with the search box */}
 
         <div className="w-full">
-          <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 grid gap-3 sm:grid-cols-2">
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
@@ -538,6 +672,16 @@ export const Dashboard = () => {
               <Plus size={18} />
               Add Anime
             </motion.button>
+
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setIsBulkAddModalOpen(true)}
+              className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-dark-700 bg-dark-800 px-6 py-3 text-sm font-semibold text-dark-50 transition-all duration-200 hover:border-accent-blue hover:text-accent-blue"
+            >
+              <Sparkles size={18} />
+              Bulk Add
+            </motion.button>
           </div>
         </div>
 
@@ -545,9 +689,11 @@ export const Dashboard = () => {
           allCategories={allCategories}
           allYears={allYears}
           showAddButton={false}
+          autoApplyFilters
           filters={{
             sortBy,
             setSortBy,
+            filterEntries,
           }}
         />
 
@@ -702,6 +848,13 @@ export const Dashboard = () => {
         onSubmit={handleAddAnime}
       />
 
+      <AnimeFormModal
+        isOpen={isBulkAddModalOpen}
+        onClose={() => setIsBulkAddModalOpen(false)}
+        onSubmitMany={handleBulkAddAnime}
+        bulkMode
+      />
+
       {editingData && (
         <AnimeFormModal
           isOpen={isEditModalOpen}
@@ -726,18 +879,21 @@ export const Dashboard = () => {
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-xl font-bold text-dark-50 mb-2">
-              Delete Anime?
+              {deleteConfirmIds.length > 1
+                ? `Delete ${deleteConfirmIds.length} anime?`
+                : "Delete Anime?"}
             </h3>
             <p className="text-dark-300 mb-6">
-              Are you sure you want to delete this anime? This action cannot be
-              undone.
+              {deleteConfirmIds.length > 1
+                ? "Are you sure you want to delete these anime? This action cannot be undone."
+                : "Are you sure you want to delete this anime? This action cannot be undone."}
             </p>
             <div className="flex gap-3">
               <button
                 onClick={confirmDelete}
                 className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2 rounded-lg transition-colors"
               >
-                Delete
+                Delete {deleteConfirmIds.length > 1 ? "Selected" : "Anime"}
               </button>
               <button
                 onClick={() => setIsDeleteConfirmOpen(false)}
@@ -749,6 +905,16 @@ export const Dashboard = () => {
           </motion.div>
         </motion.div>
       )}
+
+      <WarningDialog
+        isOpen={warningDialog.isOpen}
+        title={warningDialog.title}
+        message={warningDialog.message}
+        items={warningDialog.items}
+        onClose={() =>
+          setWarningDialog((current) => ({ ...current, isOpen: false }))
+        }
+      />
     </div>
   );
 };

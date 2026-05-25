@@ -219,3 +219,58 @@ export const Modal = ({ isOpen, onClose, children, title }) => {
     </motion.div>
   );
 };
+
+export const WarningDialog = ({
+  isOpen,
+  onClose,
+  title = "Warning",
+  message,
+  items = [],
+  confirmLabel = "OK",
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="w-full max-w-md card-base p-6 border border-amber-500/40 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-xl font-bold text-dark-50 mb-2">{title}</h3>
+        {message ? <p className="text-dark-300 mb-4">{message}</p> : null}
+
+        {Array.isArray(items) && items.length > 0 ? (
+          <div className="mb-6 max-h-56 overflow-y-auto rounded-lg border border-dark-700 bg-dark-900/70 p-3">
+            <ul className="space-y-1 text-sm text-dark-200">
+              {items.map((item, index) => (
+                <li key={`${item}-${index}`} className="truncate">
+                  • {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <div className="mb-6" />
+        )}
+
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 bg-amber-500 hover:bg-amber-400 text-dark-950 font-semibold py-2 rounded-lg transition-colors"
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+};

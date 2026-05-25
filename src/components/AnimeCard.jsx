@@ -4,7 +4,15 @@ import { ChevronDown, ChevronUp, Trash2, Edit2 } from "lucide-react";
 import { RatingStars, Badge } from "./Common";
 import { useAnimeStore } from "../store/store";
 
-export const AnimeCard = ({ anime, onEdit, onDelete, densityOverride }) => {
+export const AnimeCard = ({
+  anime,
+  onEdit,
+  onDelete,
+  densityOverride,
+  selectionMode = false,
+  isSelected = false,
+  onToggleSelect,
+}) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const cardDensity = useAnimeStore((state) => state.cardDensity);
   const effectiveCardDensity = densityOverride || cardDensity;
@@ -60,25 +68,49 @@ export const AnimeCard = ({ anime, onEdit, onDelete, densityOverride }) => {
         : "line-clamp-2";
 
   const toggleExpanded = () => setIsExpanded((current) => !current);
+  const handleCardClick = () => {
+    if (selectionMode) {
+      onToggleSelect?.(anime.id);
+      return;
+    }
+
+    toggleExpanded();
+  };
 
   if (effectiveCardDensity === "superCondensed") {
     return (
       <motion.div
-        layout
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         whileHover={{ y: -3 }}
-        className="card-base group relative overflow-hidden border border-dark-700 hover:border-accent-blue/50 transition-all duration-300 shadow-lg hover:shadow-accent-blue/20 cursor-pointer p-3 sm:p-5"
-        onClick={toggleExpanded}
+        className={`card-base group relative overflow-hidden border transition-all duration-300 shadow-lg hover:shadow-accent-blue/20 cursor-pointer p-3 sm:p-5 ${isSelected ? "border-accent-blue bg-accent-blue/5" : "border-dark-700 hover:border-accent-blue/50"}`}
+        onClick={handleCardClick}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            toggleExpanded();
+            handleCardClick();
           }
         }}
       >
+        {selectionMode && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSelect?.(anime.id);
+            }}
+            className={`absolute left-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full border backdrop-blur-sm transition-colors ${isSelected ? "border-accent-blue bg-accent-blue text-white" : "border-dark-600 bg-black/40 text-dark-200 hover:border-accent-blue hover:text-accent-blue"}`}
+            aria-pressed={isSelected}
+            aria-label={
+              isSelected ? `Deselect ${anime.title}` : `Select ${anime.title}`
+            }
+          >
+            {isSelected ? "✓" : ""}
+          </button>
+        )}
+
         {canManageAnime && (
           <div className="absolute top-2 right-2 sm:top-3 sm:right-3 z-10 flex gap-1.5 sm:gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
             <motion.button
@@ -217,21 +249,37 @@ export const AnimeCard = ({ anime, onEdit, onDelete, densityOverride }) => {
 
   return (
     <motion.div
-      layout
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -8 }}
-      className="card-base overflow-hidden group backdrop-blur-sm border border-dark-700 hover:border-accent-blue/50 transition-all duration-300 shadow-lg hover:shadow-accent-blue/20 cursor-pointer"
-      onClick={toggleExpanded}
+      className={`card-base relative overflow-hidden group backdrop-blur-sm border transition-all duration-300 shadow-lg hover:shadow-accent-blue/20 cursor-pointer ${isSelected ? "border-accent-blue bg-accent-blue/5" : "border-dark-700 hover:border-accent-blue/50"}`}
+      onClick={handleCardClick}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          toggleExpanded();
+          handleCardClick();
         }
       }}
     >
+      {selectionMode && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSelect?.(anime.id);
+          }}
+          className={`absolute left-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full border backdrop-blur-sm transition-colors ${isSelected ? "border-accent-blue bg-accent-blue text-white" : "border-dark-600 bg-black/40 text-dark-200 hover:border-accent-blue hover:text-accent-blue"}`}
+          aria-pressed={isSelected}
+          aria-label={
+            isSelected ? `Deselect ${anime.title}` : `Select ${anime.title}`
+          }
+        >
+          {isSelected ? "✓" : ""}
+        </button>
+      )}
+
       <div
         className={`relative ${cardImageHeight} overflow-hidden bg-gradient-to-br from-dark-700 to-dark-800`}
       >
@@ -454,6 +502,9 @@ export const AnimeCardGrid = ({
   onEdit,
   onDelete,
   densityOverride,
+  selectionMode = false,
+  selectedAnimeIds = [],
+  onToggleSelect,
   emptyTitle = "No anime found",
   emptyDescription = "Try adjusting your filters or add your first anime",
 }) => {
@@ -489,6 +540,9 @@ export const AnimeCardGrid = ({
           onEdit={onEdit}
           onDelete={onDelete}
           densityOverride={densityOverride}
+          selectionMode={selectionMode}
+          isSelected={selectedAnimeIds.includes(entry.id)}
+          onToggleSelect={onToggleSelect}
         />
       ))}
     </div>

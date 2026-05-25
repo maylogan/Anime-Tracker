@@ -159,6 +159,7 @@ export const FilterBar = ({
   onAddAnime,
   showAddButton = true,
   showCardDensity = true,
+  autoApplyFilters = false,
   searchPlaceholder = "Search your anime list...",
   ratingLabel = "Your Rating",
   sortRatingLabel = "Your rating",
@@ -217,6 +218,13 @@ export const FilterBar = ({
       ),
     [sortRatingLabel],
   );
+
+  const shouldAutoApply = autoApplyFilters || !filters;
+
+  const commitLiveFilters = (overrides = {}) => {
+    if (!shouldAutoApply || typeof filterEntries !== "function") return;
+    filterEntries(overrides);
+  };
 
   useEffect(() => {
     setDraftSearchQuery(searchQuery);
@@ -315,20 +323,20 @@ export const FilterBar = ({
   };
 
   const toggleCategory = (category) => {
-    setDraftCategories((current) =>
-      current.includes(category)
-        ? current.filter((item) => item !== category)
-        : [...current, category],
-    );
+    const nextCategories = draftCategories.includes(category)
+      ? draftCategories.filter((item) => item !== category)
+      : [...draftCategories, category];
+
+    setDraftCategories(nextCategories);
+    setSelectedCategories(nextCategories);
+    commitLiveFilters();
   };
 
   const handleSearchChange = (value) => {
     setDraftSearchQuery(value);
     setSearchQuery(value);
 
-    if (!filters && typeof filterEntries === "function") {
-      filterEntries({ searchQuery: value });
-    }
+    commitLiveFilters({ searchQuery: value });
   };
 
   return (
@@ -364,8 +372,18 @@ export const FilterBar = ({
               value={draftSearchQuery}
               onChange={(e) => handleSearchChange(e.target.value)}
               placeholder={searchPlaceholder}
-              className="w-full rounded-xl border border-dark-700 bg-dark-800 px-11 py-3 text-sm text-dark-50 placeholder-dark-400 transition-all duration-200 focus:border-accent-blue focus:outline-none focus:ring-1 focus:ring-accent-blue/30"
+              className="w-full rounded-xl border border-dark-700 bg-dark-800 px-11 py-3 pr-11 text-sm text-dark-50 placeholder-dark-400 transition-all duration-200 focus:border-accent-blue focus:outline-none focus:ring-1 focus:ring-accent-blue/30"
             />
+            {draftSearchQuery ? (
+              <button
+                type="button"
+                onClick={() => handleSearchChange("")}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-dark-400 transition-colors hover:text-dark-100"
+                aria-label="Clear search"
+              >
+                <X size={16} />
+              </button>
+            ) : null}
           </div>
 
           <motion.button
@@ -430,8 +448,16 @@ export const FilterBar = ({
                   activeKey={activeDropdown}
                   setActiveKey={setActiveDropdown}
                   selectedValue={draftStatus}
-                  onSelect={setDraftStatus}
-                  onReset={() => setDraftStatus("All")}
+                  onSelect={(value) => {
+                    setDraftStatus(value);
+                    setSelectedStatus(value);
+                    commitLiveFilters();
+                  }}
+                  onReset={() => {
+                    setDraftStatus("All");
+                    setSelectedStatus("All");
+                    commitLiveFilters();
+                  }}
                   resetLabel="All Statuses"
                 />
 
@@ -448,8 +474,16 @@ export const FilterBar = ({
                   activeKey={activeDropdown}
                   setActiveKey={setActiveDropdown}
                   selectedValue={draftYear}
-                  onSelect={setDraftYear}
-                  onReset={() => setDraftYear("All")}
+                  onSelect={(value) => {
+                    setDraftYear(value);
+                    setSelectedYear(value);
+                    commitLiveFilters();
+                  }}
+                  onReset={() => {
+                    setDraftYear("All");
+                    setSelectedYear("All");
+                    commitLiveFilters();
+                  }}
                   resetLabel="All Years"
                 />
 
@@ -464,8 +498,17 @@ export const FilterBar = ({
                   activeKey={activeDropdown}
                   setActiveKey={setActiveDropdown}
                   selectedValue={draftMinRating}
-                  onSelect={(value) => setDraftMinRating(Number(value))}
-                  onReset={() => setDraftMinRating(0)}
+                  onSelect={(value) => {
+                    const nextValue = Number(value);
+                    setDraftMinRating(nextValue);
+                    setMinRating(nextValue);
+                    commitLiveFilters();
+                  }}
+                  onReset={() => {
+                    setDraftMinRating(0);
+                    setMinRating(0);
+                    commitLiveFilters();
+                  }}
                   resetLabel="Any Rating"
                 />
 
@@ -480,8 +523,17 @@ export const FilterBar = ({
                   activeKey={activeDropdown}
                   setActiveKey={setActiveDropdown}
                   selectedValue={draftMinAudienceRating}
-                  onSelect={(value) => setDraftMinAudienceRating(Number(value))}
-                  onReset={() => setDraftMinAudienceRating(0)}
+                  onSelect={(value) => {
+                    const nextValue = Number(value);
+                    setDraftMinAudienceRating(nextValue);
+                    setMinAudienceRating(nextValue);
+                    commitLiveFilters();
+                  }}
+                  onReset={() => {
+                    setDraftMinAudienceRating(0);
+                    setMinAudienceRating(0);
+                    commitLiveFilters();
+                  }}
                   resetLabel="Any Rating"
                 />
 
@@ -499,13 +551,12 @@ export const FilterBar = ({
                   onSelect={(value) => {
                     setDraftSortBy(value);
                     setSortBy(value);
-                    if (typeof filterEntries === "function") {
-                      filterEntries({ sortBy: value });
-                    }
+                    commitLiveFilters({ sortBy: value });
                   }}
                   onReset={() => {
                     setDraftSortBy("latest");
                     setSortBy("latest");
+                    commitLiveFilters({ sortBy: "latest" });
                   }}
                   resetLabel="Latest entries"
                 />
@@ -519,9 +570,14 @@ export const FilterBar = ({
                       <button
                         type="button"
                         onClick={() => {
-                          hasMultiCategoryFilters
-                            ? setDraftCategories([])
-                            : setDraftCategory("All");
+                          if (hasMultiCategoryFilters) {
+                            setDraftCategories([]);
+                            setSelectedCategories([]);
+                          } else {
+                            setDraftCategory("All");
+                            setSelectedCategory("All");
+                          }
+                          commitLiveFilters();
                         }}
                         className="text-[11px] font-semibold text-dark-400 transition-colors hover:text-accent-blue"
                       >
@@ -596,9 +652,14 @@ export const FilterBar = ({
                             <button
                               type="button"
                               onClick={() => {
-                                hasMultiCategoryFilters
-                                  ? setDraftCategories([])
-                                  : setDraftCategory("All");
+                                if (hasMultiCategoryFilters) {
+                                  setDraftCategories([]);
+                                  setSelectedCategories([]);
+                                } else {
+                                  setDraftCategory("All");
+                                  setSelectedCategory("All");
+                                }
+                                commitLiveFilters();
                               }}
                               className="text-[11px] font-semibold text-dark-400 transition-colors hover:text-accent-blue"
                             >
@@ -619,22 +680,37 @@ export const FilterBar = ({
                 </div>
               </div>
 
-              <div className="mt-5 flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={applyDraftFilters}
-                  className="rounded-xl bg-accent-blue px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-600"
-                >
-                  Apply Filters
-                </button>
-                <button
-                  type="button"
-                  onClick={resetFilters}
-                  className="rounded-xl border border-dark-700 px-4 py-2.5 text-sm font-semibold text-dark-300 transition-colors hover:border-dark-500 hover:text-dark-50"
-                >
-                  Reset Filters
-                </button>
-              </div>
+              {!autoApplyFilters ? (
+                <div className="mt-5 flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={applyDraftFilters}
+                    className="rounded-xl bg-accent-blue px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-600"
+                  >
+                    Apply Filters
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="rounded-xl border border-dark-700 px-4 py-2.5 text-sm font-semibold text-dark-300 transition-colors hover:border-dark-500 hover:text-dark-50"
+                  >
+                    Reset Filters
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-5 flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="rounded-xl border border-dark-700 px-4 py-2.5 text-sm font-semibold text-dark-300 transition-colors hover:border-dark-500 hover:text-dark-50"
+                  >
+                    Reset Filters
+                  </button>
+                  <p className="text-xs text-dark-500">
+                    Filters update as you type or select options.
+                  </p>
+                </div>
+              )}
             </motion.div>
           ) : null}
         </AnimatePresence>
