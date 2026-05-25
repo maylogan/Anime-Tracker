@@ -310,6 +310,8 @@ export const AnimeFormModal = ({
             episodes:
               currentBulkDraft.episodes ||
               (formatted.episodes ? String(formatted.episodes) : ""),
+            release_date:
+              currentBulkDraft.release_date || formatted.release_date || "",
           });
         }
       } catch (err) {

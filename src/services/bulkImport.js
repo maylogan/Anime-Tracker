@@ -61,27 +61,73 @@ const normalizeDateValue = (value) => {
   const text = normalizeText(value);
   if (!text) return null;
 
+  // YYYY-MM-DD or YYYY/MM/DD
   const isoMatch = text.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
   if (isoMatch) {
     const [, year, month, day] = isoMatch;
     return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
   }
 
+  // MM/DD/YYYY or MM-DD-YYYY
   const monthDayYearMatch = text.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
   if (monthDayYearMatch) {
     const [, month, day, year] = monthDayYearMatch;
     return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
   }
 
+  // Day MonthName YYYY  (e.g., 12 Jan 2020)
+  const dayMonthYearMatch = text.match(
+    /^(\d{1,2})\s+([a-z]{3,9})\.?\,?\s+(\d{4})$/i,
+  );
+  if (dayMonthYearMatch) {
+    const [, day, monthName, year] = dayMonthYearMatch;
+    const month = MONTH_LOOKUP[monthName.toLowerCase().replace(/\.$/, "")];
+    if (month) {
+      return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    }
+  }
+
+  // MonthName Day, YYYY  (e.g., Jan 12, 2020) or MonthName-Day-YYYY
   const monthNameMatch = text.match(
-    /^(?:([a-z]{3,9})\.?\s+)(\d{1,2}),?\s+(\d{4})$/i,
+    /^(?:([a-z]{3,9})\.?[-\s]?)(\d{1,2})[,\s-]+(\d{4})$/i,
   );
   if (monthNameMatch) {
     const [, monthName, day, year] = monthNameMatch;
     const month = MONTH_LOOKUP[monthName.toLowerCase().replace(/\.$/, "")];
     if (month) {
-      return `${year}-${String(month).padStart(2, "0")}-${day.padStart(2, "0")}`;
+      return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     }
+  }
+
+  // MonthName YYYY (e.g., January 2020) -> use first day of month
+  const monthYearMatch = text.match(/^([a-z]{3,9})\.?\s+(\d{4})$/i);
+  if (monthYearMatch) {
+    const [, monthName, year] = monthYearMatch;
+    const month = MONTH_LOOKUP[monthName.toLowerCase().replace(/\.$/, "")];
+    if (month) {
+      return `${year}-${String(month).padStart(2, "0")}-01`;
+    }
+  }
+
+  // YYYY-MM or YYYY/MM -> treat as year-month
+  const yyyyMmMatch = text.match(/^(\d{4})[-/](\d{1,2})$/);
+  if (yyyyMmMatch) {
+    const [, year, month] = yyyyMmMatch;
+    return `${year}-${String(month).padStart(2, "0")}-01`;
+  }
+
+  // MM/YYYY or MM-YYYY -> treat as month-year
+  const mmYearMatch = text.match(/^(\d{1,2})[-/](\d{4})$/);
+  if (mmYearMatch) {
+    const [, month, year] = mmYearMatch;
+    return `${year}-${String(month).padStart(2, "0")}-01`;
+  }
+
+  // Year only
+  const yearOnlyMatch = text.match(/^(\d{4})$/);
+  if (yearOnlyMatch) {
+    const [, year] = yearOnlyMatch;
+    return `${year}-01-01`;
   }
 
   return null;
@@ -98,8 +144,17 @@ const parseEpisodeCount = (value) => {
     return Number(labeledMatch[1]);
   }
 
+  // number first, e.g. "1000 episodes"
+  const numberFirstMatch = text.match(/^(\d{1,4})\s*(?:episodes?|eps?|ep\.?)/i);
+  if (numberFirstMatch) {
+    return Number(numberFirstMatch[1]);
+  }
+
   if (/^\d{1,4}$/.test(text)) {
-    return Number(text);
+    const n = Number(text);
+    // treat obvious years as years, not episodes
+    if (n >= 1900 && n <= 2100) return null;
+    return n;
   }
 
   return null;
@@ -109,8 +164,15 @@ const parseReleaseDate = (value) => {
   const text = normalizeText(value);
   if (!text) return null;
 
+  // trailing year in parentheses e.g. "Title (2013)"
+  const parenYearMatch = text.match(/\((\d{4})\)\s*$/);
+  if (parenYearMatch) {
+    return normalizeDateValue(parenYearMatch[1]);
+  }
+
+  // allow commas inside the labeled value (some exports include commas)
   const labeledMatch = text.match(
-    /^(?:release\s*date|aired|air\s*date|date)\s*[:=-]\s*([^|,\t]+)/i,
+    /^(?:release\s*date|aired|air\s*date|date)\s*[:=-]\s*([^|\t]+)/i,
   );
   if (labeledMatch) {
     return normalizeDateValue(labeledMatch[1]);
@@ -121,12 +183,21 @@ const parseReleaseDate = (value) => {
     return normalizeDateValue(inlineIsoMatch[0]);
   }
 
+  // year-month like 2018-10 or 2018/10
+  const yearMonthMatch = text.match(/\b(\d{4})[-/](\d{1,2})\b/);
+  if (yearMonthMatch) {
+    return normalizeDateValue(yearMonthMatch[0]);
+  }
+
   const inlineMonthDayYearMatch = text.match(
     /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+\d{1,2},?\s+\d{4}\b/i,
   );
   if (inlineMonthDayYearMatch) {
     return normalizeDateValue(inlineMonthDayYearMatch[0]);
   }
+  // fallback: if the whole text is a year, month-year, or other supported pattern
+  const fallback = normalizeDateValue(text);
+  if (fallback) return fallback;
 
   return null;
 };
@@ -155,11 +226,34 @@ const splitImportLine = (line) => {
     .map((part) => part.trim())
     .filter(Boolean);
   if (commaSegments.length > 1) {
+    // Merge segments where a month/day was split from its year by the comma split
+    for (let i = 0; i < commaSegments.length - 1; i++) {
+      const a = commaSegments[i];
+      const b = commaSegments[i + 1];
+      if (
+        /(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\b/i.test(
+          a,
+        ) &&
+        /^\d{4}$/.test(b)
+      ) {
+        commaSegments[i] = `${a}, ${b}`;
+        commaSegments.splice(i + 1, 1);
+        i--; // re-evaluate current index
+      }
+    }
     const metadataSegments = commaSegments.filter(
       (segment, index) => index > 0 && isMetadataSegment(segment),
     );
     if (metadataSegments.length > 0) return commaSegments;
   }
+
+  // split on common dash separators (e.g. " - ", en-dash, em-dash)
+  // split on dashes but avoid splitting when hyphen is between digits (dates like 2020-04-03)
+  const dashSegments = cleaned
+    .split(/(?<!\d)\s*[-–—]\s*|\s*[-–—](?!\d)\s*/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (dashSegments.length > 1) return dashSegments;
 
   return [cleaned];
 };
