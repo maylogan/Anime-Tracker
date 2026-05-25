@@ -13,6 +13,8 @@ const samples = [
   "Title - release date: 2018/10/05",
   "Title - aired: 2018-10",
   "Title - date: 2018",
+  "JoJo's Bizarre Adventure - Stardust Crusaders - 48 episodes",
+  "86 -Eighty Six- | Episodes: 23",
 ];
 
 for (const s of samples) {

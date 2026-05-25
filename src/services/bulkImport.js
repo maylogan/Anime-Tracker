@@ -309,11 +309,17 @@ export const parseAnimeImportFile = (fileText, fileName = "") => {
     .map((line, index) => ({ line, index }))
     .map(({ line, index }) => {
       const segments = splitImportLine(line);
-      const titleSegment = segments.find(
-        (segment) => !isMetadataSegment(segment),
-      );
       const fallbackTitle = extractPlainTitle(line);
-      const title = normalizeText(titleSegment || fallbackTitle);
+      const firstMetadataIndex = segments.findIndex((segment) =>
+        isMetadataSegment(segment),
+      );
+      const titleParts =
+        firstMetadataIndex > 0 ? segments.slice(0, firstMetadataIndex) : [];
+      const joinedTitle = titleParts
+        .map((part) => stripKnownPrefixes(part))
+        .filter(Boolean)
+        .join(" ");
+      const title = normalizeText(joinedTitle || fallbackTitle);
       if (!title) return null;
 
       const episodes =

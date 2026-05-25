@@ -1,48 +1,77 @@
 import axios from "axios";
 
 const ANILIST_API = "https://graphql.anilist.co";
+const SEARCH_CACHE_TTL_MS = 10 * 60 * 1000;
+const searchCache = new Map();
+const pendingSearches = new Map();
 
 export const searchAnime = async (query) => {
-  try {
-    const { data } = await axios.post(ANILIST_API, {
-      query: `
-        query Search($search: String!) {
-          Page(perPage: 50) {
-            media(search: $search, type: ANIME, sort: SEARCH_MATCH) {
-              id
-              title {
-                english
-                romaji
-                native
-              }
-              genres
-              averageScore
-              coverImage {
-                extraLarge
-                large
-              }
-              episodes
-              startDate {
-                year
-                month
-                day
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) return [];
+
+  const cached = searchCache.get(normalizedQuery);
+  if (cached && Date.now() - cached.timestamp < SEARCH_CACHE_TTL_MS) {
+    return cached.results;
+  }
+
+  if (pendingSearches.has(normalizedQuery)) {
+    return pendingSearches.get(normalizedQuery);
+  }
+
+  const request = (async () => {
+    try {
+      const { data } = await axios.post(ANILIST_API, {
+        query: `
+          query Search($search: String!) {
+            Page(perPage: 50) {
+              media(search: $search, type: ANIME, sort: SEARCH_MATCH) {
+                id
+                title {
+                  english
+                  romaji
+                  native
+                }
+                genres
+                averageScore
+                coverImage {
+                  extraLarge
+                  large
+                }
+                episodes
+                startDate {
+                  year
+                  month
+                  day
+                }
               }
             }
           }
-        }
-      `,
-      variables: { search: query.trim() },
-    });
+        `,
+        variables: { search: query.trim() },
+      });
 
-    const results = data.data?.Page?.media || [];
-    console.log(
-      `Search for "${query}" - Found ${results.length} results:`,
-      results.slice(0, 5),
-    );
-    return results;
-  } catch (error) {
-    console.error("Error searching anime:", error);
-    return [];
+      const results = data.data?.Page?.media || [];
+      searchCache.set(normalizedQuery, {
+        timestamp: Date.now(),
+        results,
+      });
+      console.log(
+        `Search for "${query}" - Found ${results.length} results:`,
+        results.slice(0, 5),
+      );
+      return results;
+    } catch (error) {
+      console.error("Error searching anime:", error);
+      return [];
+    }
+  })();
+
+  pendingSearches.set(normalizedQuery, request);
+
+  try {
+    return await request;
+  } finally {
+    pendingSearches.delete(normalizedQuery);
   }
 };
 

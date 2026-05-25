@@ -54,6 +54,8 @@ export const AnimeFormModal = ({
   const [bulkDrafts, setBulkDrafts] = useState([]);
   const [bulkCurrentIndex, setBulkCurrentIndex] = useState(0);
   const [bulkImportName, setBulkImportName] = useState("");
+  const [bulkImportSource, setBulkImportSource] = useState("selection");
+  const [isBulkAdvancing, setIsBulkAdvancing] = useState(false);
   const [isBulkCancelConfirmOpen, setIsBulkCancelConfirmOpen] = useState(false);
   const [warningDialog, setWarningDialog] = useState({
     isOpen: false,
@@ -61,6 +63,7 @@ export const AnimeFormModal = ({
     message: "",
   });
   const bulkFileInputRef = useRef(null);
+  const bulkAdvanceModeRef = useRef(null);
 
   const debouncedSearch = useDebounce(searchQuery, 500);
 
@@ -215,8 +218,10 @@ export const AnimeFormModal = ({
     source = null,
     formattedAnime,
     overrides = {},
+    importSource = "selection",
   }) => ({
     source,
+    importSource,
     anime_id:
       overrides.anime_id ?? formattedAnime.anime_id ?? source?.id ?? null,
     title: overrides.title ?? formattedAnime.title,
@@ -331,7 +336,7 @@ export const AnimeFormModal = ({
     currentBulkDraft?.title,
     currentBulkDraft?.poster_url,
   ]);
-  const updateCurrentBulkDraft = (patch) => {
+  const updateBulkDraftAtIndex = (targetIndex, patch) => {
     if (patch.poster_url)
       console.log(
         "updateCurrentBulkDraft: set poster_url ->",
@@ -339,9 +344,13 @@ export const AnimeFormModal = ({
       );
     setBulkDrafts((current) =>
       current.map((draft, index) =>
-        index === bulkCurrentIndex ? { ...draft, ...patch } : draft,
+        index === targetIndex ? { ...draft, ...patch } : draft,
       ),
     );
+  };
+
+  const updateCurrentBulkDraft = (patch) => {
+    updateBulkDraftAtIndex(bulkCurrentIndex, patch);
   };
 
   const startBulkStepper = (
@@ -349,6 +358,7 @@ export const AnimeFormModal = ({
     importName = "",
     selectionSnapshot = [],
     startIndex = 0,
+    importSource = "selection",
   ) => {
     if (!drafts || drafts.length === 0) {
       openWarningDialog({
@@ -369,6 +379,7 @@ export const AnimeFormModal = ({
     setBulkStage("edit");
     setSearchResults([]);
     setBulkImportName(importName);
+    setBulkImportSource(importSource);
   };
 
   const handleImportBulkFile = async (event) => {
@@ -394,6 +405,8 @@ export const AnimeFormModal = ({
         importedDrafts,
         file.name,
         importedDrafts.map((draft) => draft.source || draft),
+        0,
+        "txt",
       );
     } catch (error) {
       console.error("Bulk import error:", error);
@@ -444,6 +457,8 @@ export const AnimeFormModal = ({
   };
 
   const returnToBulkSelection = () => {
+    if (bulkImportSource === "txt") return;
+
     const restoredSelection =
       bulkDrafts.length > 0
         ? bulkDrafts.map((draft) => ({ ...(draft.source || draft) }))
@@ -456,12 +471,51 @@ export const AnimeFormModal = ({
     setSearchQuery("");
   };
 
-  const goToNextBulkDraft = async () => {
-    if (bulkCurrentIndex >= bulkDrafts.length - 1) {
-      await finalizeBulkStepper();
+  const removeCurrentBulkDraft = () => {
+    if (!currentBulkDraft) return;
+
+    const nextDrafts = bulkDrafts.filter(
+      (_, index) => index !== bulkCurrentIndex,
+    );
+    const nextSelection = selectedBulkAnime.filter(
+      (_, index) => index !== bulkCurrentIndex,
+    );
+
+    setBulkDrafts(nextDrafts);
+    setSelectedBulkAnime(nextSelection);
+    setBulkSelectionSnapshot(nextSelection.map((item) => ({ ...item })));
+
+    if (nextDrafts.length === 0) {
+      setBulkCurrentIndex(0);
+      setBulkStage("select");
+      setBulkImportName("");
+      setBulkImportSource("selection");
+      setSearchResults([]);
+      setSearchQuery("");
       return;
     }
 
+    setBulkCurrentIndex((current) => Math.min(current, nextDrafts.length - 1));
+  };
+
+  const goToNextBulkDraft = async () => {
+    if (isBulkAdvancing) return;
+    if (!currentBulkDraft) return;
+
+    setIsBulkAdvancing(true);
+
+    if (bulkCurrentIndex >= bulkDrafts.length - 1) {
+      bulkAdvanceModeRef.current = "finalize";
+      try {
+        await finalizeBulkStepper();
+      } finally {
+        bulkAdvanceModeRef.current = null;
+        setIsBulkAdvancing(false);
+      }
+      return;
+    }
+
+    bulkAdvanceModeRef.current = "advance";
     setBulkCurrentIndex((current) =>
       Math.min(bulkDrafts.length - 1, current + 1),
     );
@@ -481,6 +535,7 @@ export const AnimeFormModal = ({
       resumeIndex >= 0
         ? resumeIndex
         : Math.min(bulkCurrentIndex, Math.max(0, rebuiltDrafts.length - 1)),
+      bulkImportSource,
     );
   };
 
@@ -510,6 +565,11 @@ export const AnimeFormModal = ({
         openWarningDialog({
           message: "Error adding anime: " + error.message,
         });
+      } finally {
+        if (bulkAdvanceModeRef.current === "advance") {
+          bulkAdvanceModeRef.current = null;
+          setIsBulkAdvancing(false);
+        }
       }
 
       return;
@@ -547,6 +607,77 @@ export const AnimeFormModal = ({
       });
     }
   };
+
+  useEffect(() => {
+    if (bulkAdvanceModeRef.current === "advance") {
+      bulkAdvanceModeRef.current = null;
+      setIsBulkAdvancing(false);
+    }
+  }, [bulkCurrentIndex]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const draftIndex = bulkCurrentIndex;
+    const draftAtStart = currentBulkDraft;
+    const tryFetchPoster = async () => {
+      if (!isBulkEditing || !draftAtStart) return;
+      if (draftAtStart.poster_url) return;
+      setPosterLoadingIndex(draftIndex);
+
+      const titleToSearch =
+        draftAtStart.title ||
+        draftAtStart.source?.title?.english ||
+        draftAtStart.source?.title?.romaji;
+      if (!titleToSearch) {
+        setPosterLoadingIndex(null);
+        return;
+      }
+
+      try {
+        console.log("Bulk poster lookup for:", titleToSearch);
+        const results = await searchAnime(titleToSearch);
+        console.log("Poster lookup results count:", results?.length);
+        if (cancelled) return;
+        const first = results?.[0];
+        if (first) {
+          const formatted = formatAnimeForEntry(first);
+          console.log("Selected poster:", formatted.poster_url);
+          updateBulkDraftAtIndex(draftIndex, {
+            poster_url: formatted.poster_url || "",
+            categories:
+              formatted.categories && formatted.categories.length > 0
+                ? formatted.categories
+                : draftAtStart.categories,
+            audience_rating:
+              formatted.audience_rating ?? draftAtStart.audience_rating,
+            episodes:
+              draftAtStart.episodes ||
+              (formatted.episodes ? String(formatted.episodes) : ""),
+            release_date:
+              draftAtStart.release_date || formatted.release_date || "",
+          });
+        }
+      } catch (err) {
+        // ignore poster lookup failures
+      } finally {
+        setPosterLoadingIndex(null);
+      }
+    };
+
+    tryFetchPoster();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    bulkCurrentIndex,
+    isBulkEditing,
+    currentBulkDraft?.title,
+    currentBulkDraft?.poster_url,
+    currentBulkDraft?.importSource,
+  ]);
+
+  const canReturnToSelection =
+    bulkMode && bulkStage === "edit" && bulkImportSource !== "txt";
 
   if (!isOpen) return null;
 
@@ -768,9 +899,22 @@ export const AnimeFormModal = ({
                       <p className="text-xs font-semibold uppercase tracking-wide text-accent-blue">
                         Item {bulkCurrentIndex + 1} of {bulkDrafts.length}
                       </p>
-                      <h3 className="mt-1 text-xl font-bold text-dark-50">
-                        {currentBulkDraft.title}
-                      </h3>
+                      <div className="mt-1 flex items-start justify-between gap-3">
+                        <h3 className="text-xl font-bold text-dark-50">
+                          {currentBulkDraft.title}
+                        </h3>
+                        {bulkImportSource === "txt" ? (
+                          <button
+                            type="button"
+                            onClick={removeCurrentBulkDraft}
+                            className="shrink-0 rounded-full border border-rose-500/30 bg-rose-500/10 p-2 text-rose-200 transition-colors hover:border-rose-400 hover:bg-rose-500/20 hover:text-rose-100"
+                            aria-label="Skip this anime"
+                            title="Skip this anime"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        ) : null}
+                      </div>
                       <p className="mt-1 text-sm text-dark-400">
                         {currentBulkDraft.categories?.length > 0
                           ? currentBulkDraft.categories.join(", ")
@@ -1001,17 +1145,19 @@ export const AnimeFormModal = ({
 
           {bulkMode && bulkStage === "edit" ? (
             <div className="flex flex-wrap gap-3 pt-4">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  returnToBulkSelection();
-                }}
-                className="flex-1 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-2.5 font-semibold text-cyan-300 transition-colors hover:border-cyan-400 hover:bg-cyan-500/15 hover:text-cyan-200"
-              >
-                Back to selection
-              </button>
+              {canReturnToSelection ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    returnToBulkSelection();
+                  }}
+                  className="flex-1 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-2.5 font-semibold text-cyan-300 transition-colors hover:border-cyan-400 hover:bg-cyan-500/15 hover:text-cyan-200"
+                >
+                  Back to selection
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={goToPreviousBulkDraft}
@@ -1023,6 +1169,7 @@ export const AnimeFormModal = ({
               <button
                 type="button"
                 onClick={goToNextBulkDraft}
+                disabled={isBulkAdvancing}
                 className="flex-1 rounded-xl bg-emerald-500 px-4 py-2.5 font-semibold text-white transition-colors hover:bg-emerald-400"
               >
                 {bulkCurrentIndex >= bulkDrafts.length - 1
